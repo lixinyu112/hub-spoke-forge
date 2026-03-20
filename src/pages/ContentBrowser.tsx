@@ -138,7 +138,7 @@ export default function ContentBrowser() {
                             className="flex items-center gap-1.5 w-full px-2 py-1.5 rounded-md text-sm hover:bg-muted/50 transition-colors"
                           >
                             {expandedHubs.has(hub.id) ? <ChevronDown className="h-3 w-3 text-muted-foreground" /> : <ChevronRight className="h-3 w-3 text-muted-foreground" />}
-                            <Network className="h-3.5 w-3.5 text-orange-500" />
+                            <Network className="h-3.5 w-3.5 text-warning" />
                             <span className="truncate">{hub.title}</span>
                             <Badge variant="outline" className="text-[10px] ml-auto shrink-0">{hub.spokes.length}S</Badge>
                           </button>

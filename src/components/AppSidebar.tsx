@@ -16,9 +16,9 @@ import {
 } from "@/components/ui/sidebar";
 
 const items = [
-  { title: "1. Component Specs", url: "/", icon: FileText },
-  { title: "2. Spoke Generator", url: "/spoke-generator", icon: Sparkles },
-  { title: "3. Hub Synthesizer", url: "/hub-synthesizer", icon: Network },
+  { title: "1. 组件规范", url: "/", icon: FileText },
+  { title: "2. Spoke 生成器", url: "/spoke-generator", icon: Sparkles },
+  { title: "3. Hub 合成器", url: "/hub-synthesizer", icon: Network },
 ];
 
 export function AppSidebar() {
@@ -38,12 +38,12 @@ export function AppSidebar() {
                 </div>
                 <div>
                   <p className="text-sm font-semibold text-foreground">Hub-Spoke</p>
-                  <p className="text-[10px] text-muted-foreground font-mono">Agent Dashboard</p>
+                  <p className="text-[10px] text-muted-foreground font-mono">智能代理仪表盘</p>
                 </div>
               </div>
             </div>
           )}
-          <SidebarGroupLabel>Workflow</SidebarGroupLabel>
+          <SidebarGroupLabel>工作流程</SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
               {items.map((item) => (

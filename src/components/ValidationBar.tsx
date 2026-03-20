@@ -22,17 +22,17 @@ export function ValidationBar({ status, message }: ValidationBarProps) {
     >
       <div className="flex items-center gap-2">
         {passed ? <CheckCircle2 className="h-3.5 w-3.5" /> : <XCircle className="h-3.5 w-3.5" />}
-        <span>{message || (passed ? "Schema Validation Passed" : "Validation Failed")}</span>
+        <span>{message || (passed ? "Schema 验证通过" : "验证失败")}</span>
       </div>
       {!passed && (
         <Button
           variant="ghost"
           size="sm"
           className="h-6 text-[10px] gap-1 text-destructive hover:text-destructive"
-          onClick={() => toast({ title: "Auto-Fix initiated", description: "AI is correcting the schema issues…" })}
+          onClick={() => toast({ title: "AI 自动修复已启动", description: "AI 正在修正 Schema 问题…" })}
         >
           <Wand2 className="h-3 w-3" />
-          Auto-Fix via AI
+          AI 自动修复
         </Button>
       )}
     </div>

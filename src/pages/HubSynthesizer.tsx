@@ -3,7 +3,6 @@ import { Network, ChevronRight, FileJson } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { CodeViewer } from "@/components/CodeViewer";
@@ -11,24 +10,24 @@ import { ValidationBar } from "@/components/ValidationBar";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 const SPOKES = [
-  { id: "1", title: "AWS EC2 Setup Guide", slug: "/cloud-infrastructure/aws-ec2" },
-  { id: "2", title: "AWS S3 Storage Basics", slug: "/cloud-infrastructure/aws-s3" },
-  { id: "3", title: "AWS Lambda Functions", slug: "/cloud-infrastructure/aws-lambda" },
-  { id: "4", title: "Docker Containerization", slug: "/cloud-infrastructure/docker" },
-  { id: "5", title: "Kubernetes Orchestration", slug: "/cloud-infrastructure/kubernetes" },
+  { id: "1", title: "AWS EC2 部署指南", slug: "/cloud-infrastructure/aws-ec2" },
+  { id: "2", title: "AWS S3 存储基础", slug: "/cloud-infrastructure/aws-s3" },
+  { id: "3", title: "AWS Lambda 函数", slug: "/cloud-infrastructure/aws-lambda" },
+  { id: "4", title: "Docker 容器化", slug: "/cloud-infrastructure/docker" },
+  { id: "5", title: "Kubernetes 编排", slug: "/cloud-infrastructure/kubernetes" },
 ];
 
 const MOCK_HUB = (selectedSlugs: string[]) => JSON.stringify({
   type: "hub",
-  title: "Cloud Infrastructure Guide",
+  title: "云基础设施指南",
   slug: "/cloud-infrastructure",
-  meta_description: "Your complete guide to modern cloud infrastructure, covering AWS, Docker, and Kubernetes.",
-  hero: { heading: "Master Cloud Infrastructure", subheading: "From EC2 to Kubernetes — everything you need." },
+  meta_description: "您的现代云基础设施完整指南，涵盖 AWS、Docker 和 Kubernetes。",
+  hero: { heading: "精通云基础设施", subheading: "从 EC2 到 Kubernetes — 您需要的一切。" },
   spoke_links: selectedSlugs.map((s) => ({
     slug: s,
     title: SPOKES.find((sp) => sp.slug === s)?.title || s,
   })),
-  supplementary_context: "Enterprise-grade cloud infrastructure patterns.",
+  supplementary_context: "企业级云基础设施模式。",
 }, null, 2);
 
 export default function HubSynthesizer() {
@@ -58,16 +57,16 @@ export default function HubSynthesizer() {
   return (
     <div className="p-6 h-full flex flex-col gap-4">
       <div>
-        <h1 className="text-2xl font-semibold tracking-tight">Hub Synthesizer</h1>
-        <p className="text-sm text-muted-foreground mt-1">Aggregate Spoke pages into a structured Hub JSON.</p>
+        <h1 className="text-2xl font-semibold tracking-tight">Hub 合成器</h1>
+        <p className="text-sm text-muted-foreground mt-1">将 Spoke 页面聚合为结构化的 Hub JSON。</p>
       </div>
 
       <div className="flex-1 grid lg:grid-cols-2 gap-4 min-h-0">
-        {/* Left */}
+        {/* 左侧 */}
         <div className="flex flex-col gap-4 overflow-auto">
           <Card>
             <CardHeader className="pb-3">
-              <CardTitle className="text-base">Select Spoke Pages</CardTitle>
+              <CardTitle className="text-base">选择 Spoke 页面</CardTitle>
             </CardHeader>
             <CardContent className="space-y-2">
               {SPOKES.map((spoke) => (
@@ -87,11 +86,11 @@ export default function HubSynthesizer() {
 
           <Card>
             <CardHeader className="pb-3">
-              <CardTitle className="text-base">Supplementary Hub Data</CardTitle>
+              <CardTitle className="text-base">补充 Hub 数据</CardTitle>
             </CardHeader>
             <CardContent>
               <Textarea
-                placeholder="Broad industry context, overarching theme…"
+                placeholder="行业大背景、总体主题…"
                 value={context}
                 onChange={(e) => setContext(e.target.value)}
                 className="min-h-[100px]"
@@ -101,7 +100,7 @@ export default function HubSynthesizer() {
 
           <Card>
             <CardHeader className="pb-3">
-              <CardTitle className="text-base">Hub Component Spec</CardTitle>
+              <CardTitle className="text-base">Hub 组件规范</CardTitle>
             </CardHeader>
             <CardContent className="space-y-3">
               <Select defaultValue="hub-default">
@@ -109,30 +108,30 @@ export default function HubSynthesizer() {
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="hub-default">Hub — Default Schema v1</SelectItem>
-                  <SelectItem value="hub-extended">Hub — Extended Schema v2</SelectItem>
+                  <SelectItem value="hub-default">Hub — 默认 Schema v1</SelectItem>
+                  <SelectItem value="hub-extended">Hub — 扩展 Schema v2</SelectItem>
                 </SelectContent>
               </Select>
               <Button onClick={handleGenerate} className="w-full gap-2" disabled={loading}>
                 <Network className="h-4 w-4" />
-                Synthesize Hub JSON ✨
+                合成 Hub JSON ✨
               </Button>
             </CardContent>
           </Card>
         </div>
 
-        {/* Right */}
+        {/* 右侧 */}
         <div className="flex flex-col gap-3 min-h-0">
           <ValidationBar
             status={validation}
-            message={validation === "passed" ? "✅ Schema Validation Passed" : validation === "failed" ? "❌ Validation Failed: Missing required field 'title'" : undefined}
+            message={validation === "passed" ? "✅ Schema 验证通过" : validation === "failed" ? "❌ 验证失败：缺少必填字段 'title'" : undefined}
           />
           <Card className="flex-1 min-h-0 flex flex-col">
             <Tabs defaultValue="json" className="flex-1 flex flex-col">
               <div className="border-b px-4">
                 <TabsList className="bg-transparent h-9">
-                  <TabsTrigger value="json" className="text-xs">JSON Output</TabsTrigger>
-                  <TabsTrigger value="tree" className="text-xs">Tree View</TabsTrigger>
+                  <TabsTrigger value="json" className="text-xs">JSON 输出</TabsTrigger>
+                  <TabsTrigger value="tree" className="text-xs">树形视图</TabsTrigger>
                 </TabsList>
               </div>
               <TabsContent value="json" className="flex-1 m-0">
@@ -158,7 +157,7 @@ export default function HubSynthesizer() {
                     </div>
                   </div>
                 ) : (
-                  <p className="text-sm text-muted-foreground text-center py-8">Generate Hub JSON to see the tree view</p>
+                  <p className="text-sm text-muted-foreground text-center py-8">生成 Hub JSON 后可查看树形视图</p>
                 )}
               </TabsContent>
             </Tabs>

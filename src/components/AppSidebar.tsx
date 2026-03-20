@@ -43,7 +43,7 @@ export function AppSidebar() {
               </div>
             </div>
           )}
-          <SidebarGroupLabel>Workflow</SidebarGroupLabel>
+          <SidebarGroupLabel>工作流程</SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
               {items.map((item) => (

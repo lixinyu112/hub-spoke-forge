@@ -8,7 +8,7 @@ import { Badge } from "@/components/ui/badge";
 
 const SAMPLE_HUB_JSON = `{
   "type": "hub",
-  "title": "Cloud Infrastructure Guide",
+  "title": "云基础设施指南",
   "slug": "/cloud-infrastructure",
   "meta_description": "...",
   "hero": { "heading": "...", "subheading": "..." },
@@ -17,11 +17,11 @@ const SAMPLE_HUB_JSON = `{
 
 const SAMPLE_SPOKE_JSON = `{
   "type": "spoke",
-  "title": "AWS EC2 Setup Guide",
+  "title": "AWS EC2 部署指南",
   "slug": "/cloud-infrastructure/aws-ec2",
   "parent_hub": "/cloud-infrastructure",
   "sections": [],
-  "cta": { "text": "Get Started", "url": "#" }
+  "cta": { "text": "立即开始", "url": "#" }
 }`;
 
 export default function ComponentSpecs() {
@@ -35,24 +35,24 @@ export default function ComponentSpecs() {
     setDragOver(false);
     const newFiles = Array.from(e.dataTransfer.files).map((f) => f.name);
     setFiles((prev) => [...prev, ...newFiles]);
-    toast({ title: "Files uploaded", description: `${newFiles.length} file(s) added` });
+    toast({ title: "文件已上传", description: `已添加 ${newFiles.length} 个文件` });
   };
 
   const handleSave = () => {
-    toast({ title: "Specifications saved", description: "Component specs updated successfully." });
+    toast({ title: "规范已保存", description: "组件规范更新成功。" });
   };
 
   return (
     <div className="p-6 max-w-4xl mx-auto space-y-6">
       <div>
-        <h1 className="text-2xl font-semibold tracking-tight">Component Specs</h1>
-        <p className="text-sm text-muted-foreground mt-1">Upload constraint documents and define JSON schemas for Hub & Spoke components.</p>
+        <h1 className="text-2xl font-semibold tracking-tight">组件规范</h1>
+        <p className="text-sm text-muted-foreground mt-1">上传约束文档并定义 Hub 和 Spoke 组件的 JSON 模式。</p>
       </div>
 
       <Card>
         <CardHeader>
-          <CardTitle className="text-base">Constraint Documents</CardTitle>
-          <CardDescription>Upload PDF or Markdown specification files</CardDescription>
+          <CardTitle className="text-base">约束文档</CardTitle>
+          <CardDescription>上传 PDF 或 Markdown 规范文件</CardDescription>
         </CardHeader>
         <CardContent>
           <div
@@ -61,15 +61,15 @@ export default function ComponentSpecs() {
             onDrop={handleDrop}
             onClick={() => {
               setFiles((prev) => [...prev, `spec-doc-${prev.length + 1}.pdf`]);
-              toast({ title: "File added (mocked)" });
+              toast({ title: "文件已添加（模拟）" });
             }}
             className={`border-2 border-dashed rounded-lg p-10 text-center cursor-pointer transition-colors ${
               dragOver ? "border-primary bg-primary/5" : "border-border hover:border-muted-foreground/40"
             }`}
           >
             <Upload className="h-8 w-8 mx-auto text-muted-foreground mb-3" />
-            <p className="text-sm text-muted-foreground">Drag & drop PDF/Markdown files here, or click to browse</p>
-            <p className="text-xs text-muted-foreground/60 mt-1">.pdf, .md, .mdx supported</p>
+            <p className="text-sm text-muted-foreground">将 PDF/Markdown 文件拖放到此处，或点击浏览</p>
+            <p className="text-xs text-muted-foreground/60 mt-1">支持 .pdf、.md、.mdx 格式</p>
           </div>
 
           {files.length > 0 && (
@@ -88,7 +88,7 @@ export default function ComponentSpecs() {
       <div className="grid md:grid-cols-2 gap-4">
         <Card>
           <CardHeader>
-            <CardTitle className="text-base">Hub JSON Example</CardTitle>
+            <CardTitle className="text-base">Hub JSON 示例</CardTitle>
           </CardHeader>
           <CardContent>
             <Textarea
@@ -100,7 +100,7 @@ export default function ComponentSpecs() {
         </Card>
         <Card>
           <CardHeader>
-            <CardTitle className="text-base">Spoke JSON Example</CardTitle>
+            <CardTitle className="text-base">Spoke JSON 示例</CardTitle>
           </CardHeader>
           <CardContent>
             <Textarea
@@ -114,7 +114,7 @@ export default function ComponentSpecs() {
 
       <Button onClick={handleSave} className="gap-2">
         <Save className="h-4 w-4" />
-        Save Specifications
+        保存规范
       </Button>
     </div>
   );

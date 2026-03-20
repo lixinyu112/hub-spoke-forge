@@ -16,9 +16,9 @@ import {
 } from "@/components/ui/sidebar";
 
 const items = [
-  { title: "1. Component Specs", url: "/", icon: FileText },
-  { title: "2. Spoke Generator", url: "/spoke-generator", icon: Sparkles },
-  { title: "3. Hub Synthesizer", url: "/hub-synthesizer", icon: Network },
+  { title: "1. 组件规范", url: "/", icon: FileText },
+  { title: "2. Spoke 生成器", url: "/spoke-generator", icon: Sparkles },
+  { title: "3. Hub 合成器", url: "/hub-synthesizer", icon: Network },
 ];
 
 export function AppSidebar() {

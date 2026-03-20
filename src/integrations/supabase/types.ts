@@ -14,7 +14,201 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      component_specs: {
+        Row: {
+          created_at: string
+          id: string
+          json_schema: Json | null
+          name: string
+          project_id: string
+          type: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          json_schema?: Json | null
+          name: string
+          project_id: string
+          type: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          json_schema?: Json | null
+          name?: string
+          project_id?: string
+          type?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "component_specs_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      hubs: {
+        Row: {
+          created_at: string
+          id: string
+          json_data: Json | null
+          slug: string | null
+          status: string
+          theme_id: string
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          json_data?: Json | null
+          slug?: string | null
+          status?: string
+          theme_id: string
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          json_data?: Json | null
+          slug?: string | null
+          status?: string
+          theme_id?: string
+          title?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "hubs_theme_id_fkey"
+            columns: ["theme_id"]
+            isOneToOne: false
+            referencedRelation: "themes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      projects: {
+        Row: {
+          created_at: string
+          description: string | null
+          id: string
+          name: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          name: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          name?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      spokes: {
+        Row: {
+          created_at: string
+          feishu_doc_title: string | null
+          feishu_doc_token: string | null
+          hub_id: string | null
+          id: string
+          json_data: Json | null
+          slug: string | null
+          status: string
+          theme_id: string
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          feishu_doc_title?: string | null
+          feishu_doc_token?: string | null
+          hub_id?: string | null
+          id?: string
+          json_data?: Json | null
+          slug?: string | null
+          status?: string
+          theme_id: string
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          feishu_doc_title?: string | null
+          feishu_doc_token?: string | null
+          hub_id?: string | null
+          id?: string
+          json_data?: Json | null
+          slug?: string | null
+          status?: string
+          theme_id?: string
+          title?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "spokes_hub_id_fkey"
+            columns: ["hub_id"]
+            isOneToOne: false
+            referencedRelation: "hubs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "spokes_theme_id_fkey"
+            columns: ["theme_id"]
+            isOneToOne: false
+            referencedRelation: "themes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      themes: {
+        Row: {
+          created_at: string
+          description: string | null
+          id: string
+          name: string
+          project_id: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          name: string
+          project_id: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          name?: string
+          project_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "themes_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never

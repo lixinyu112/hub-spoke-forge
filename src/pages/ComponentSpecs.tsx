@@ -1,10 +1,13 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Upload, FileText, Save } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { toast } from "@/hooks/use-toast";
 import { Badge } from "@/components/ui/badge";
+import { useProject } from "@/contexts/ProjectContext";
+import { getComponentSpecs, createComponentSpec } from "@/lib/api";
+import type { ComponentSpec } from "@/lib/api";
 
 const SAMPLE_HUB_JSON = `{
   "type": "hub",
@@ -25,10 +28,18 @@ const SAMPLE_SPOKE_JSON = `{
 }`;
 
 export default function ComponentSpecs() {
+  const { currentProject } = useProject();
   const [files, setFiles] = useState<string[]>([]);
   const [hubJson, setHubJson] = useState(SAMPLE_HUB_JSON);
   const [spokeJson, setSpokeJson] = useState(SAMPLE_SPOKE_JSON);
   const [dragOver, setDragOver] = useState(false);
+  const [savedSpecs, setSavedSpecs] = useState<ComponentSpec[]>([]);
+
+  useEffect(() => {
+    if (currentProject) {
+      getComponentSpecs(currentProject.id).then(setSavedSpecs).catch(console.error);
+    }
+  }, [currentProject]);
 
   const handleDrop = (e: React.DragEvent) => {
     e.preventDefault();
@@ -38,16 +49,52 @@ export default function ComponentSpecs() {
     toast({ title: "文件已上传", description: `已添加 ${newFiles.length} 个文件` });
   };
 
-  const handleSave = () => {
-    toast({ title: "规范已保存", description: "组件规范更新成功。" });
+  const handleSave = async () => {
+    if (!currentProject) {
+      toast({ title: "请先选择项目", variant: "destructive" });
+      return;
+    }
+    try {
+      let hubParsed, spokeParsed;
+      try { hubParsed = JSON.parse(hubJson); } catch { hubParsed = hubJson; }
+      try { spokeParsed = JSON.parse(spokeJson); } catch { spokeParsed = spokeJson; }
+
+      await createComponentSpec({ project_id: currentProject.id, name: "Hub Schema", type: "hub", json_schema: hubParsed });
+      await createComponentSpec({ project_id: currentProject.id, name: "Spoke Schema", type: "spoke", json_schema: spokeParsed });
+      toast({ title: "规范已保存", description: "组件规范更新成功。" });
+      getComponentSpecs(currentProject.id).then(setSavedSpecs);
+    } catch (e) {
+      console.error(e);
+      toast({ title: "保存失败", variant: "destructive" });
+    }
   };
 
   return (
     <div className="p-6 max-w-4xl mx-auto space-y-6">
       <div>
         <h1 className="text-2xl font-semibold tracking-tight">组件规范</h1>
-        <p className="text-sm text-muted-foreground mt-1">上传约束文档并定义 Hub 和 Spoke 组件的 JSON 模式。</p>
+        <p className="text-sm text-muted-foreground mt-1">
+          上传约束文档并定义 Hub 和 Spoke 组件的 JSON 模式。
+          {currentProject && <span className="text-primary ml-1">当前项目: {currentProject.name}</span>}
+        </p>
       </div>
+
+      {savedSpecs.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">已保存的规范</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="flex flex-wrap gap-2">
+              {savedSpecs.map((s) => (
+                <Badge key={s.id} variant="secondary" className="gap-1.5 text-xs">
+                  {s.type === "hub" ? "🔗" : "📄"} {s.name}
+                </Badge>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       <Card>
         <CardHeader>
@@ -71,7 +118,6 @@ export default function ComponentSpecs() {
             <p className="text-sm text-muted-foreground">将 PDF/Markdown 文件拖放到此处，或点击浏览</p>
             <p className="text-xs text-muted-foreground/60 mt-1">支持 .pdf、.md、.mdx 格式</p>
           </div>
-
           {files.length > 0 && (
             <div className="mt-4 flex flex-wrap gap-2">
               {files.map((f, i) => (
@@ -91,11 +137,7 @@ export default function ComponentSpecs() {
             <CardTitle className="text-base">Hub JSON 示例</CardTitle>
           </CardHeader>
           <CardContent>
-            <Textarea
-              value={hubJson}
-              onChange={(e) => setHubJson(e.target.value)}
-              className="font-mono text-xs min-h-[200px] bg-code text-code-foreground"
-            />
+            <Textarea value={hubJson} onChange={(e) => setHubJson(e.target.value)} className="font-mono text-xs min-h-[200px] bg-code text-code-foreground" />
           </CardContent>
         </Card>
         <Card>
@@ -103,11 +145,7 @@ export default function ComponentSpecs() {
             <CardTitle className="text-base">Spoke JSON 示例</CardTitle>
           </CardHeader>
           <CardContent>
-            <Textarea
-              value={spokeJson}
-              onChange={(e) => setSpokeJson(e.target.value)}
-              className="font-mono text-xs min-h-[200px] bg-code text-code-foreground"
-            />
+            <Textarea value={spokeJson} onChange={(e) => setSpokeJson(e.target.value)} className="font-mono text-xs min-h-[200px] bg-code text-code-foreground" />
           </CardContent>
         </Card>
       </div>

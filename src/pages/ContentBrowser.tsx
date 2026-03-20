@@ -150,7 +150,7 @@ export default function ContentBrowser() {
                                   onClick={() => setSelectedNode({ type: "spoke", data: spoke })}
                                   className="flex items-center gap-1.5 w-full px-2 py-1.5 rounded-md text-xs hover:bg-muted/50 transition-colors"
                                 >
-                                  <FileJson className="h-3 w-3 text-blue-500" />
+                                  <FileJson className="h-3 w-3 text-primary" />
                                   <span className="truncate">{spoke.title}</span>
                                 </button>
                               ))}

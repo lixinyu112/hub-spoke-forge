@@ -38,7 +38,7 @@ export function AppSidebar() {
                 </div>
                 <div>
                   <p className="text-sm font-semibold text-foreground">Hub-Spoke</p>
-                  <p className="text-[10px] text-muted-foreground font-mono">Agent Dashboard</p>
+                  <p className="text-[10px] text-muted-foreground font-mono">智能代理仪表盘</p>
                 </div>
               </div>
             </div>

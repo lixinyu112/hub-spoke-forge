@@ -117,6 +117,56 @@ export type Database = {
         }
         Relationships: []
       }
+      publications: {
+        Row: {
+          created_at: string
+          id: string
+          json_data: Json | null
+          language: string
+          project_id: string
+          published_at: string
+          source_id: string
+          source_type: string
+          status: string
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          json_data?: Json | null
+          language?: string
+          project_id: string
+          published_at?: string
+          source_id: string
+          source_type: string
+          status?: string
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          json_data?: Json | null
+          language?: string
+          project_id?: string
+          published_at?: string
+          source_id?: string
+          source_type?: string
+          status?: string
+          title?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "publications_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       spokes: {
         Row: {
           created_at: string

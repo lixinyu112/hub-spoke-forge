@@ -93,3 +93,22 @@ export async function getProjectTree(projectId: string) {
   );
   return tree;
 }
+
+// Publications
+export async function getPublications(projectId: string) {
+  const { data, error } = await supabase.from("publications").select("*").eq("project_id", projectId).order("published_at", { ascending: false });
+  if (error) throw error;
+  return data;
+}
+
+export async function createPublication(pub: TablesInsert<"publications">) {
+  const { data, error } = await supabase.from("publications").insert(pub).select().single();
+  if (error) throw error;
+  return data;
+}
+
+export async function createPublicationsBatch(pubs: TablesInsert<"publications">[]) {
+  const { data, error } = await supabase.from("publications").insert(pubs).select();
+  if (error) throw error;
+  return data;
+}

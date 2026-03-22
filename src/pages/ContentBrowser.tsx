@@ -1,21 +1,26 @@
-import { useState, useEffect, useCallback } from "react";
-import { Plus, Send } from "lucide-react";
+import { useState, useEffect, useCallback, useMemo } from "react";
+import { Plus, Send, Filter } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Layers } from "lucide-react";
 import { useProject } from "@/contexts/ProjectContext";
 import { getProjectTree, createTheme, createPublicationsBatch } from "@/lib/api";
 import { toast } from "@/hooks/use-toast";
 import { ContentTree, type TreeTheme } from "@/components/ContentTree";
 import { PublishDialog } from "@/components/PublishDialog";
+import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from "@/components/ui/resizable";
+
+const THEME_NAME_REGEX = /^[a-z][a-z\-]*$/;
 
 export default function ContentBrowser() {
   const { currentProject } = useProject();
-  const [tree, setTree] = useState<TreeTheme[]>([]);
+  const [allThemes, setAllThemes] = useState<TreeTheme[]>([]);
   const [loading, setLoading] = useState(false);
+  const [selectedThemeId, setSelectedThemeId] = useState<string>("");
   const [expandedThemes, setExpandedThemes] = useState<Set<string>>(new Set());
   const [expandedHubs, setExpandedHubs] = useState<Set<string>>(new Set());
   const [selectedNode, setSelectedNode] = useState<{ type: "theme" | "hub" | "spoke"; data: any } | null>(null);
@@ -25,14 +30,17 @@ export default function ContentBrowser() {
   const [publishing, setPublishing] = useState(false);
   const [newThemeName, setNewThemeName] = useState("");
   const [newThemeDesc, setNewThemeDesc] = useState("");
+  const [themeNameError, setThemeNameError] = useState("");
 
   const loadTree = useCallback(async () => {
     if (!currentProject) return;
     setLoading(true);
     try {
       const data = await getProjectTree(currentProject.id);
-      setTree(data);
-      setExpandedThemes(new Set(data.map((t) => t.id)));
+      setAllThemes(data);
+      if (!selectedThemeId && data.length > 0) {
+        setSelectedThemeId(data[0].id);
+      }
     } catch (e) {
       console.error(e);
     }
@@ -40,6 +48,22 @@ export default function ContentBrowser() {
   }, [currentProject]);
 
   useEffect(() => { loadTree(); }, [loadTree]);
+
+  // Filter tree to show only the selected theme
+  const filteredTree = useMemo(() => {
+    if (!selectedThemeId) return [];
+    const theme = allThemes.find((t) => t.id === selectedThemeId);
+    return theme ? [theme] : [];
+  }, [allThemes, selectedThemeId]);
+
+  // Expand the selected theme automatically
+  useEffect(() => {
+    if (selectedThemeId) {
+      setExpandedThemes(new Set([selectedThemeId]));
+      setSelectedNode(null);
+      setSelectedItems(new Set());
+    }
+  }, [selectedThemeId]);
 
   const toggleTheme = (id: string) => {
     setExpandedThemes((prev) => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
@@ -54,12 +78,11 @@ export default function ContentBrowser() {
     setSelectedItems((prev) => { const n = new Set(prev); n.has(key) ? n.delete(key) : n.add(key); return n; });
   };
 
-  // Resolve selected items to their data
   const getSelectedData = () => {
     const items: { type: "hub" | "spoke"; id: string; title: string; json_data: any }[] = [];
     for (const key of selectedItems) {
       const [type, id] = key.split(":");
-      for (const theme of tree) {
+      for (const theme of filteredTree) {
         if (type === "hub") {
           const hub = theme.hubs.find((h) => h.id === id);
           if (hub) items.push({ type: "hub", id: hub.id, title: hub.title, json_data: hub.json_data });
@@ -99,14 +122,31 @@ export default function ContentBrowser() {
     setPublishing(false);
   };
 
+  const validateThemeName = (name: string) => {
+    if (!name) { setThemeNameError(""); return false; }
+    if (!THEME_NAME_REGEX.test(name)) {
+      setThemeNameError("仅允许英文小写字母与中划线（-），且以字母开头");
+      return false;
+    }
+    setThemeNameError("");
+    return true;
+  };
+
+  const handleThemeNameChange = (val: string) => {
+    setNewThemeName(val);
+    validateThemeName(val);
+  };
+
   const handleCreateTheme = async () => {
     if (!currentProject || !newThemeName.trim()) return;
+    if (!validateThemeName(newThemeName.trim())) return;
     try {
-      await createTheme(currentProject.id, newThemeName.trim(), newThemeDesc.trim() || undefined);
-      setNewThemeName(""); setNewThemeDesc("");
+      const created = await createTheme(currentProject.id, newThemeName.trim(), newThemeDesc.trim() || undefined);
+      setNewThemeName(""); setNewThemeDesc(""); setThemeNameError("");
       setThemeDialogOpen(false);
       toast({ title: "主题已创建" });
-      loadTree();
+      await loadTree();
+      setSelectedThemeId(created.id);
     } catch (e) {
       console.error(e);
       toast({ title: "创建失败", variant: "destructive" });
@@ -134,77 +174,106 @@ export default function ContentBrowser() {
         </div>
       </div>
 
-      <div className="flex-1 grid lg:grid-cols-[340px_1fr] gap-4 min-h-0">
-        <Card className="flex flex-col min-h-0">
-          <CardHeader className="pb-2 shrink-0">
-            <CardTitle className="text-base flex items-center gap-2">
-              <Layers className="h-4 w-4" />
-              目录树
-              {selectedItems.size > 0 && (
-                <Badge variant="default" className="text-[10px] ml-auto">{selectedItems.size} 已选</Badge>
-              )}
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="flex-1 overflow-auto p-2">
-            <ContentTree
-              tree={tree}
-              loading={loading}
-              expandedThemes={expandedThemes}
-              expandedHubs={expandedHubs}
-              selectedItems={selectedItems}
-              onToggleTheme={toggleTheme}
-              onToggleHub={toggleHub}
-              onSelectNode={setSelectedNode}
-              onToggleItem={toggleItem}
-            />
-          </CardContent>
-        </Card>
+      {/* Theme filter */}
+      <div className="flex items-center gap-2">
+        <Filter className="h-4 w-4 text-muted-foreground" />
+        <Select value={selectedThemeId} onValueChange={setSelectedThemeId}>
+          <SelectTrigger className="w-[260px]">
+            <SelectValue placeholder="选择主题..." />
+          </SelectTrigger>
+          <SelectContent>
+            {allThemes.map((t) => (
+              <SelectItem key={t.id} value={t.id}>
+                {t.name}
+                <span className="text-muted-foreground ml-2 text-xs">
+                  ({t.hubs.length}H / {t.hubs.reduce((a, h) => a + h.spokes.length, 0) + t.unlinkedSpokes.length}S)
+                </span>
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
 
-        <Card className="flex flex-col min-h-0">
-          <CardHeader className="pb-2 shrink-0">
-            <CardTitle className="text-base">
-              {selectedNode
-                ? `${selectedNode.type === "theme" ? "主题" : selectedNode.type === "hub" ? "Hub" : "Spoke"}: ${selectedNode.data.name || selectedNode.data.title}`
-                : "详情"}
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="flex-1 overflow-auto">
-            {!selectedNode ? (
-              <div className="text-center py-12 text-muted-foreground">
-                <p className="text-sm">点击左侧树形目录中的节点查看详情</p>
+      {/* Resizable panels */}
+      <div className="flex-1 min-h-0">
+        <ResizablePanelGroup direction="horizontal" className="rounded-lg border">
+          <ResizablePanel defaultSize={35} minSize={25} maxSize={50}>
+            <div className="flex flex-col h-full">
+              <div className="px-4 py-3 border-b shrink-0">
+                <h3 className="text-sm font-medium flex items-center gap-2">
+                  <Layers className="h-4 w-4" />
+                  目录树
+                  {selectedItems.size > 0 && (
+                    <Badge variant="default" className="text-[10px] ml-auto">{selectedItems.size} 已选</Badge>
+                  )}
+                </h3>
               </div>
-            ) : selectedNode.type === "theme" ? (
-              <div className="space-y-3">
-                <div><p className="text-xs text-muted-foreground">名称</p><p className="text-sm font-medium">{selectedNode.data.name}</p></div>
-                {selectedNode.data.description && <div><p className="text-xs text-muted-foreground">描述</p><p className="text-sm">{selectedNode.data.description}</p></div>}
-                <div>
-                  <p className="text-xs text-muted-foreground">统计</p>
-                  <p className="text-sm">{selectedNode.data.hubs?.length || 0} 个 Hub，{(selectedNode.data.hubs?.reduce((a: number, h: any) => a + h.spokes.length, 0) || 0) + (selectedNode.data.unlinkedSpokes?.length || 0)} 个 Spoke</p>
-                </div>
+              <div className="flex-1 overflow-auto p-2">
+                <ContentTree
+                  tree={filteredTree}
+                  loading={loading}
+                  expandedThemes={expandedThemes}
+                  expandedHubs={expandedHubs}
+                  selectedItems={selectedItems}
+                  onToggleTheme={toggleTheme}
+                  onToggleHub={toggleHub}
+                  onSelectNode={setSelectedNode}
+                  onToggleItem={toggleItem}
+                />
               </div>
-            ) : (
-              <div className="space-y-3">
-                <div className="grid grid-cols-2 gap-3">
-                  <div><p className="text-xs text-muted-foreground">标题</p><p className="text-sm font-medium">{selectedNode.data.title}</p></div>
-                  <div>
-                    <p className="text-xs text-muted-foreground">状态</p>
-                    <Badge variant={selectedNode.data.status === "generated" ? "default" : "secondary"} className="text-xs">{selectedNode.data.status}</Badge>
+            </div>
+          </ResizablePanel>
+
+          <ResizableHandle withHandle />
+
+          <ResizablePanel defaultSize={65}>
+            <div className="flex flex-col h-full">
+              <div className="px-4 py-3 border-b shrink-0">
+                <h3 className="text-sm font-medium">
+                  {selectedNode
+                    ? `${selectedNode.type === "theme" ? "主题" : selectedNode.type === "hub" ? "Hub" : "Spoke"}: ${selectedNode.data.name || selectedNode.data.title}`
+                    : "详情"}
+                </h3>
+              </div>
+              <div className="flex-1 overflow-auto p-4">
+                {!selectedNode ? (
+                  <div className="text-center py-12 text-muted-foreground">
+                    <p className="text-sm">点击左侧树形目录中的节点查看详情</p>
                   </div>
-                  {selectedNode.data.slug && <div><p className="text-xs text-muted-foreground">Slug</p><p className="text-xs font-mono">{selectedNode.data.slug}</p></div>}
-                  {selectedNode.data.feishu_doc_title && <div><p className="text-xs text-muted-foreground">飞书文档</p><p className="text-xs">{selectedNode.data.feishu_doc_title}</p></div>}
-                </div>
-                {selectedNode.data.json_data && (
-                  <div>
-                    <p className="text-xs text-muted-foreground mb-1">JSON 数据</p>
-                    <div className="bg-muted rounded-md border overflow-auto max-h-[400px]">
-                      <pre className="p-3 text-xs font-mono whitespace-pre-wrap">{JSON.stringify(selectedNode.data.json_data, null, 2)}</pre>
+                ) : selectedNode.type === "theme" ? (
+                  <div className="space-y-3">
+                    <div><p className="text-xs text-muted-foreground">名称</p><p className="text-sm font-medium">{selectedNode.data.name}</p></div>
+                    {selectedNode.data.description && <div><p className="text-xs text-muted-foreground">描述</p><p className="text-sm">{selectedNode.data.description}</p></div>}
+                    <div>
+                      <p className="text-xs text-muted-foreground">统计</p>
+                      <p className="text-sm">{selectedNode.data.hubs?.length || 0} 个 Hub，{(selectedNode.data.hubs?.reduce((a: number, h: any) => a + h.spokes.length, 0) || 0) + (selectedNode.data.unlinkedSpokes?.length || 0)} 个 Spoke</p>
                     </div>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    <div className="grid grid-cols-2 gap-3">
+                      <div><p className="text-xs text-muted-foreground">标题</p><p className="text-sm font-medium">{selectedNode.data.title}</p></div>
+                      <div>
+                        <p className="text-xs text-muted-foreground">状态</p>
+                        <Badge variant={selectedNode.data.status === "generated" ? "default" : "secondary"} className="text-xs">{selectedNode.data.status}</Badge>
+                      </div>
+                      {selectedNode.data.slug && <div><p className="text-xs text-muted-foreground">Slug</p><p className="text-xs font-mono">{selectedNode.data.slug}</p></div>}
+                      {selectedNode.data.feishu_doc_title && <div><p className="text-xs text-muted-foreground">飞书文档</p><p className="text-xs">{selectedNode.data.feishu_doc_title}</p></div>}
+                    </div>
+                    {selectedNode.data.json_data && (
+                      <div>
+                        <p className="text-xs text-muted-foreground mb-1">JSON 数据</p>
+                        <div className="bg-muted rounded-md border overflow-auto max-h-[400px]">
+                          <pre className="p-3 text-xs font-mono whitespace-pre-wrap">{JSON.stringify(selectedNode.data.json_data, null, 2)}</pre>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
-            )}
-          </CardContent>
-        </Card>
+            </div>
+          </ResizablePanel>
+        </ResizablePanelGroup>
       </div>
 
       {/* Create Theme Dialog */}
@@ -212,12 +281,21 @@ export default function ContentBrowser() {
         <DialogContent className="sm:max-w-md">
           <DialogHeader><DialogTitle>新建主题</DialogTitle></DialogHeader>
           <div className="space-y-3">
-            <Input placeholder="主题名称" value={newThemeName} onChange={(e) => setNewThemeName(e.target.value)} />
+            <div>
+              <Input
+                placeholder="主题名称（仅英文小写字母与中划线）"
+                value={newThemeName}
+                onChange={(e) => handleThemeNameChange(e.target.value)}
+                className={themeNameError ? "border-destructive" : ""}
+              />
+              {themeNameError && <p className="text-xs text-destructive mt-1">{themeNameError}</p>}
+              <p className="text-xs text-muted-foreground mt-1">例如：digital-marketing、seo-guide</p>
+            </div>
             <Input placeholder="描述（可选）" value={newThemeDesc} onChange={(e) => setNewThemeDesc(e.target.value)} />
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setThemeDialogOpen(false)}>取消</Button>
-            <Button onClick={handleCreateTheme} disabled={!newThemeName.trim()}>创建</Button>
+            <Button onClick={handleCreateTheme} disabled={!newThemeName.trim() || !!themeNameError}>创建</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

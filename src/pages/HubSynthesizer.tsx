@@ -25,6 +25,7 @@ export default function HubSynthesizer() {
   const [spokes, setSpokes] = useState<Spoke[]>([]);
   const [selectedSpokes, setSelectedSpokes] = useState<string[]>([]);
   const [context, setContext] = useState("");
+  const [prompt, setPrompt] = useState("");
 
   useEffect(() => {
     if (currentProject) {

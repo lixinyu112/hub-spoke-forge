@@ -13,6 +13,7 @@ import { toast } from "@/hooks/use-toast";
 import { ContentTree, type TreeTheme } from "@/components/ContentTree";
 import { PublishDialog } from "@/components/PublishDialog";
 import { CodeViewer } from "@/components/CodeViewer";
+import { PromptConfigButton } from "@/components/PromptConfigButton";
 import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from "@/components/ui/resizable";
 
 const THEME_NAME_REGEX = /^[a-z][a-z\-]*$/;

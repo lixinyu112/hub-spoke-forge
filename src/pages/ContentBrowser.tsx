@@ -160,7 +160,10 @@ export default function ContentBrowser() {
     <div className="p-6 h-full flex flex-col gap-4">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight">内容浏览</h1>
+          <div className="flex items-center gap-1">
+            <h1 className="text-2xl font-semibold tracking-tight">内容浏览</h1>
+            <PromptConfigButton value={prompt} onChange={setPrompt} placeholder="输入用于内容处理的 system prompt…" />
+          </div>
           <p className="text-sm text-muted-foreground mt-1">按 主题 → Hub → Spoke 层级查看并发布内容</p>
         </div>
         <div className="flex items-center gap-2">

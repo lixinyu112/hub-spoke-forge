@@ -179,7 +179,10 @@ export default function SpokeGenerator() {
     <div className="p-6 h-full flex flex-col gap-4">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Spoke 生成器</h1>
+          <div className="flex items-center gap-1.5">
+            <h1 className="text-2xl font-semibold tracking-tight">Spoke 生成器</h1>
+            <PromptConfigButton value={prompt} onChange={setPrompt} placeholder="输入 Spoke 生成的 system prompt…" />
+          </div>
           <p className="text-sm text-muted-foreground mt-1">从飞书文档生成结构化 Spoke JSON</p>
         </div>
         <Tabs value={mode} onValueChange={(v) => setMode(v as "single" | "batch")}>

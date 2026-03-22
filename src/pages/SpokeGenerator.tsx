@@ -16,6 +16,7 @@ import { getThemes, getComponentSpecs, createSpoke } from "@/lib/api";
 import { fetchFeishuDocs } from "@/lib/feishu";
 import { toast } from "@/hooks/use-toast";
 import type { Theme, ComponentSpec } from "@/lib/api";
+import { PromptConfigButton } from "@/components/PromptConfigButton";
 
 interface FeishuDoc {
   token: string;

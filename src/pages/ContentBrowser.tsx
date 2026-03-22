@@ -33,6 +33,7 @@ export default function ContentBrowser() {
   const [newThemeName, setNewThemeName] = useState("");
   const [newThemeDesc, setNewThemeDesc] = useState("");
   const [themeNameError, setThemeNameError] = useState("");
+  const [prompt, setPrompt] = useState("");
 
   const loadTree = useCallback(async () => {
     if (!currentProject) return;

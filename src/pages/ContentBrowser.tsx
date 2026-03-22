@@ -257,8 +257,6 @@ export default function ContentBrowser() {
                   />
                 )}
               </div>
-                )}
-              </div>
             </div>
           </ResizablePanel>
         </ResizablePanelGroup>

@@ -13,6 +13,7 @@ import { toast } from "@/hooks/use-toast";
 import { ContentTree, type TreeTheme } from "@/components/ContentTree";
 import { PublishDialog } from "@/components/PublishDialog";
 import { CodeViewer } from "@/components/CodeViewer";
+import { PromptConfigButton } from "@/components/PromptConfigButton";
 import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from "@/components/ui/resizable";
 
 const THEME_NAME_REGEX = /^[a-z][a-z\-]*$/;
@@ -32,6 +33,7 @@ export default function ContentBrowser() {
   const [newThemeName, setNewThemeName] = useState("");
   const [newThemeDesc, setNewThemeDesc] = useState("");
   const [themeNameError, setThemeNameError] = useState("");
+  const [prompt, setPrompt] = useState("");
 
   const loadTree = useCallback(async () => {
     if (!currentProject) return;
@@ -158,7 +160,10 @@ export default function ContentBrowser() {
     <div className="p-6 h-full flex flex-col gap-4">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight">内容浏览</h1>
+          <div className="flex items-center gap-1">
+            <h1 className="text-2xl font-semibold tracking-tight">内容浏览</h1>
+            <PromptConfigButton value={prompt} onChange={setPrompt} placeholder="输入用于内容处理的 system prompt…" />
+          </div>
           <p className="text-sm text-muted-foreground mt-1">按 主题 → Hub → Spoke 层级查看并发布内容</p>
         </div>
         <div className="flex items-center gap-2">

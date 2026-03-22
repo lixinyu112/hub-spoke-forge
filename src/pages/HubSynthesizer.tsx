@@ -12,6 +12,7 @@ import { useProject } from "@/contexts/ProjectContext";
 import { getThemes, getSpokes, getComponentSpecs, createHub } from "@/lib/api";
 import { toast } from "@/hooks/use-toast";
 import type { Theme, Spoke, ComponentSpec } from "@/lib/api";
+import { PromptConfigButton } from "@/components/PromptConfigButton";
 
 export default function HubSynthesizer() {
   const { currentProject } = useProject();
@@ -24,6 +25,7 @@ export default function HubSynthesizer() {
   const [spokes, setSpokes] = useState<Spoke[]>([]);
   const [selectedSpokes, setSelectedSpokes] = useState<string[]>([]);
   const [context, setContext] = useState("");
+  const [prompt, setPrompt] = useState("");
 
   useEffect(() => {
     if (currentProject) {
@@ -86,7 +88,10 @@ export default function HubSynthesizer() {
   return (
     <div className="p-6 h-full flex flex-col gap-4">
       <div>
-        <h1 className="text-2xl font-semibold tracking-tight">Hub 合成器</h1>
+        <div className="flex items-center gap-1.5">
+          <h1 className="text-2xl font-semibold tracking-tight">Hub 合成器</h1>
+          <PromptConfigButton value={prompt} onChange={setPrompt} placeholder="输入 Hub 合成的 system prompt…" />
+        </div>
         <p className="text-sm text-muted-foreground mt-1">将 Spoke 页面聚合为结构化的 Hub JSON</p>
       </div>
 

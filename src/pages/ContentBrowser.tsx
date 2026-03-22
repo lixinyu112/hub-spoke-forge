@@ -12,6 +12,7 @@ import { getProjectTree, createTheme, createPublicationsBatch } from "@/lib/api"
 import { toast } from "@/hooks/use-toast";
 import { ContentTree, type TreeTheme } from "@/components/ContentTree";
 import { PublishDialog } from "@/components/PublishDialog";
+import { CodeViewer } from "@/components/CodeViewer";
 import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from "@/components/ui/resizable";
 
 const THEME_NAME_REGEX = /^[a-z][a-z\-]*$/;
@@ -235,13 +236,13 @@ export default function ContentBrowser() {
                     : "详情"}
                 </h3>
               </div>
-              <div className="flex-1 overflow-auto p-4">
+              <div className="flex-1 overflow-auto">
                 {!selectedNode ? (
                   <div className="text-center py-12 text-muted-foreground">
                     <p className="text-sm">点击左侧树形目录中的节点查看详情</p>
                   </div>
                 ) : selectedNode.type === "theme" ? (
-                  <div className="space-y-3">
+                  <div className="space-y-3 p-4">
                     <div><p className="text-xs text-muted-foreground">名称</p><p className="text-sm font-medium">{selectedNode.data.name}</p></div>
                     {selectedNode.data.description && <div><p className="text-xs text-muted-foreground">描述</p><p className="text-sm">{selectedNode.data.description}</p></div>}
                     <div>
@@ -250,25 +251,10 @@ export default function ContentBrowser() {
                     </div>
                   </div>
                 ) : (
-                  <div className="space-y-3">
-                    <div className="grid grid-cols-2 gap-3">
-                      <div><p className="text-xs text-muted-foreground">标题</p><p className="text-sm font-medium">{selectedNode.data.title}</p></div>
-                      <div>
-                        <p className="text-xs text-muted-foreground">状态</p>
-                        <Badge variant={selectedNode.data.status === "generated" ? "default" : "secondary"} className="text-xs">{selectedNode.data.status}</Badge>
-                      </div>
-                      {selectedNode.data.slug && <div><p className="text-xs text-muted-foreground">Slug</p><p className="text-xs font-mono">{selectedNode.data.slug}</p></div>}
-                      {selectedNode.data.feishu_doc_title && <div><p className="text-xs text-muted-foreground">飞书文档</p><p className="text-xs">{selectedNode.data.feishu_doc_title}</p></div>}
-                    </div>
-                    {selectedNode.data.json_data && (
-                      <div>
-                        <p className="text-xs text-muted-foreground mb-1">JSON 数据</p>
-                        <div className="bg-muted rounded-md border overflow-auto max-h-[400px]">
-                          <pre className="p-3 text-xs font-mono whitespace-pre-wrap">{JSON.stringify(selectedNode.data.json_data, null, 2)}</pre>
-                        </div>
-                      </div>
-                    )}
-                  </div>
+                  <CodeViewer
+                    code={selectedNode.data.json_data ? JSON.stringify(selectedNode.data.json_data, null, 2) : "// 暂无 JSON 数据"}
+                    filename={`${selectedNode.data.slug || selectedNode.data.title}.json`}
+                  />
                 )}
               </div>
             </div>

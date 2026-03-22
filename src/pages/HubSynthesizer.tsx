@@ -12,6 +12,7 @@ import { useProject } from "@/contexts/ProjectContext";
 import { getThemes, getSpokes, getComponentSpecs, createHub } from "@/lib/api";
 import { toast } from "@/hooks/use-toast";
 import type { Theme, Spoke, ComponentSpec } from "@/lib/api";
+import { PromptConfigButton } from "@/components/PromptConfigButton";
 
 export default function HubSynthesizer() {
   const { currentProject } = useProject();

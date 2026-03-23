@@ -36,18 +36,6 @@ const MOCK_FEISHU_DOCS: FeishuDoc[] = [
   { token: "doxcnXYZ007", name: "API 网关方案对比", type: "docx" },
 ];
 
-const MOCK_OUTPUT = (title: string) => JSON.stringify({
-  type: "spoke",
-  title,
-  slug: `/${title.toLowerCase().replace(/\s+/g, '-')}`,
-  meta_description: `关于${title}的详细指南。`,
-  sections: [
-    { heading: "概述", body: "本文将详细介绍..." },
-    { heading: "核心概念", body: "首先我们需要了解..." },
-    { heading: "实战步骤", body: "按照以下步骤操作..." },
-  ],
-  cta: { text: "了解更多", url: "#" },
-}, null, 2);
 
 export default function SpokeGenerator() {
   const { currentProject } = useProject();

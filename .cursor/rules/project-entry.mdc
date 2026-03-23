@@ -1,0 +1,27 @@
+---
+alwaysApply: true
+---
+
+---
+description: 项目总入口规则
+globs:
+  - "**/*"
+alwaysApply: true
+---
+
+在本项目中生成任何代码前，必须同时遵循以下规则文件：
+- architecture.mdc
+- coding-style.mdc
+- security-and-data.mdc
+
+优先级：
+1. 不破坏基础工程结构
+2. 分层边界正确
+3. 安全与数据校验完整
+4. 类型安全完整
+5. 代码可运行、可维护、可测试
+
+若用户需求与当前规则冲突：
+- 先指出冲突点
+- 给出符合当前工程规范的实现方案
+- 不得擅自破坏现有基础工程

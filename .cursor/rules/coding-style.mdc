@@ -1,0 +1,114 @@
+---
+alwaysApply: true
+---
+---
+description: 企业级 Next.js + TS 项目编码风格、命名规范与输出规范
+globs:
+  - "**/*.{ts,tsx,js,jsx,json,md}"
+alwaysApply: true
+---
+
+你生成的所有代码必须满足：可读、可维护、可扩展、类型安全、可直接落地。
+
+# 一、基础工程风格
+
+必须遵守：
+- 包管理器统一为 pnpm
+- Node 使用 LTS 版本
+- UTF-8 无 BOM
+- LF 换行
+- 2 空格缩进
+- ESLint + Prettier 兼容
+- 合并前必须通过 lint、typecheck、test
+
+# 二、命名规范
+
+## 1. 文件命名
+- React 组件文件：PascalCase.tsx
+- Hooks 文件：useXxx.ts
+- 工具函数文件：camelCase.ts
+- 目录名：kebab-case
+
+## 2. 标识符命名
+- 组件名：PascalCase
+- 变量名：camelCase
+- 函数名：camelCase
+- 常量名：UPPER_SNAKE_CASE
+- 类型名：XxxDTO / XxxEntity / XxxProps / XxxResponse
+
+## 3. 事件与队列命名
+- 事件：domain.event.action
+- 队列：{domain}.{context}.{purpose}
+
+示例：
+- order.payment.succeeded
+- order.notification.email
+
+# 三、TypeScript 规则
+
+必须开启并遵循严格类型风格：
+
+1. 禁止使用 `any`
+2. 优先使用 `unknown` + 类型收窄
+3. 函数参数必须显式声明类型
+4. 函数返回值必须显式声明类型
+5. DTO、Entity、Props、Response 类型分离
+6. 优先从 Zod schema 推导类型
+7. 不允许省略关键业务类型
+8. 不允许用类型断言掩盖真实问题
+
+推荐：
+- `type` 用于组合结构
+- `interface` 用于可扩展对象契约
+- 联合类型表达状态
+- 使用穷尽检查处理分支
+
+# 四、组件与 Hooks 规范
+
+## 1. React 组件
+- 单个组件职责单一
+- 页面组件负责装配，不承载复杂业务实现
+- 优先拆分 UI 组件和业务组件
+- Props 类型必须明确
+- 不允许无边界透传大量 props
+
+## 2. Hooks
+- Hooks 只封装可复用状态和逻辑
+- Hook 名称必须以 `use` 开头
+- 不在 Hook 中混入大量领域规则
+- Hook 的返回值结构要稳定、清晰
+
+# 五、函数与工具代码规范
+
+生成函数时必须满足：
+- 单一职责
+- 入参、返回值明确
+- 错误场景可控
+- 边界情况完整
+- 逻辑可测试
+
+公共函数必须包含 TSDoc，至少说明：
+- 功能
+- 参数
+- 返回值
+- 异常
+- 边界条件
+
+示例格式：
+
+/**
+ * 根据货币最小单位格式化金额。
+ * @param amount 金额整数值，例如分。
+ * @param currency 货币代码，例如 CNY。
+ * @returns 格式化后的显示字符串。
+ * @throws 当 amount 非法时抛出错误。
+ */
+
+# 六、注释规范
+
+只解释“为什么”，不要解释显而易见的“做了什么”。
+
+错误示例：
+```ts
+// 给数组排序
+items.sort(...)

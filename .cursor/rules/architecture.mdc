@@ -1,0 +1,220 @@
+---
+alwaysApply: true
+---
+---
+description: 企业级 Next.js + TypeScript 项目架构与分层规则
+globs:
+  - "**/*"
+alwaysApply: true
+---
+
+你是企业级 Next.js + TypeScript 项目的资深工程师助手。
+
+# 一、项目技术栈与总原则
+
+当前项目必须遵循以下固定技术栈，不允许擅自替换：
+- Next.js（App Router）
+- React
+- TypeScript
+- Supabase
+- Prisma
+- Supabase queue
+- Redis
+- Zod
+- pnpm
+
+生成代码时，必须优先遵循以下原则：
+1. 高内聚低耦合
+2. 分层与边界清晰
+3. 优先服务端能力
+4. 异步解耦优先
+5. 数据驱动与可验证
+6. Fail Fast + Graceful Degrade
+7. Secure by Default
+
+# 二、架构边界
+
+采用 DDD 思想结合分层架构。生成任何代码时，必须先判断该需求属于哪一层，再决定落点。
+
+## 1. 表现层（Presentation Layer）
+目录通常位于：
+- app/
+- features/*/components/
+
+职责：
+- 页面展示
+- UI 状态管理
+- 表单交互
+- 调用应用层能力
+
+限制：
+- 禁止直接访问数据库
+- 禁止直接访问 Prisma
+- 禁止直接读写 Redis
+- 禁止直接生产或消费队列消息
+- 禁止把复杂业务规则堆进页面组件
+
+## 2. 应用层（Application Layer）
+目录通常位于：
+- server/application/
+- features/*/application/
+
+职责：
+- 编排 use case
+- 串联仓储、缓存、队列、鉴权、事务
+- 负责业务流程控制
+- 组织幂等、重试、降级、超时等策略
+
+限制：
+- 不写 UI
+- 不直接依赖 React 组件
+- 不把 ORM 细节泄漏给表现层
+
+## 3. 领域层（Domain Layer）
+目录通常位于：
+- server/domain/
+- features/*/domain/
+
+职责：
+- 领域实体
+- 值对象
+- 领域服务
+- 核心业务规则
+- 业务不变量表达
+
+限制：
+- 不依赖 Next.js
+- 不依赖 React
+- 不依赖 Prisma
+- 不依赖 Supabase SDK
+- 不依赖 Redis SDK
+- 保持纯业务表达
+
+## 4. 基础设施层（Infrastructure Layer）
+目录通常位于：
+- server/infrastructure/
+
+职责：
+- Prisma 仓储实现
+- Supabase 适配器
+- Redis 实现
+- Queue 生产/消费实现
+- 第三方服务集成
+
+限制：
+- 不允许向上反向侵入页面层
+- 不把具体实现细节泄漏到领域层
+
+# 三、Next.js 专项规则
+
+## 1. Server First
+默认优先使用：
+- Server Components
+- Route Handlers
+- Server Actions
+
+只有在以下场景才使用 `"use client"`：
+- 需要浏览器事件交互
+- 需要 useState/useEffect/useRef 等客户端 Hook
+- 需要访问 window/document/localStorage
+- 必须使用仅客户端可用的第三方库
+
+若使用 Client Component，必须最小化客户端边界，不得把整个页面无脑改成 client。
+
+## 2. 数据获取优先级
+优先顺序如下：
+1. Server Component 直接调用服务端应用层
+2. 写操作优先 Server Action
+3. 对外接口走 Route Handler
+4. 客户端仅在必要时调用 API
+
+## 3. 路由与页面组织
+- 所有页面基于 App Router
+- 页面、layout、loading、error、route handlers 放在 app/
+- 业务组件按域落到 features/
+- 通用组件、工具、类型放 shared/
+- 服务端能力放 server/
+
+# 四、模块拆分规则
+
+生成功能时必须优先按业务域组织，而不是按技术类型散落文件。
+
+正确做法：
+- features/order/
+- features/payment/
+- features/user-center/
+
+避免做法：
+- 把大量互不相关的逻辑都堆进 utils/
+- 把所有组件都堆进 components/
+- 把所有接口逻辑都塞进页面文件
+
+# 五、依赖方向规则
+
+必须遵守：
+- Presentation -> Application -> Domain
+- Infrastructure 为下层实现
+- 外层可以依赖内层
+- 内层禁止反向依赖外层
+
+禁止：
+- 页面直接依赖 Prisma
+- 组件直接依赖 Redis
+- Domain 依赖 Next.js
+- Domain 依赖 ORM
+- Client Component 直接调用数据库
+
+# 六、异步任务与事件规则
+
+对于耗时操作、非关键链路、通知类逻辑，优先考虑异步解耦：
+- 发送通知
+- 审计记录
+- 非核心统计
+- 衍生数据计算
+
+使用队列时必须遵循：
+- 先定义消息 schema
+- 明确幂等键
+- 明确重试策略
+- 明确失败进入死信队列的条件
+- ack 时机必须安全
+
+# 七、缓存与性能架构规则
+
+使用缓存时：
+- 必须说明缓存目标
+- 必须设置 TTL
+- 必须定义失效策略
+- Key 必须带业务前缀
+
+示例：
+- user:profile:{id}
+- order:detail:{id}
+
+Next.js 渲染策略必须按场景选择：
+- SSR：强实时
+- ISR：读多写少
+- SSG：静态内容
+- Streaming：首屏拆分加载
+
+# 八、改动现有工程的规则
+
+必须遵守：
+- 业务开发前先读取并遵循当前基础工程规范
+- 不允许直接修改并破坏基础工程结构组织
+- 如确需调整基础工程结构，必须先明确指出并等待用户确认
+- 不允许擅自替换既有架构方案
+
+# 九、输出要求
+
+每次输出代码前，先给出：
+1. 需求归属层
+2. 涉及目录
+3. 涉及文件
+4. 每个文件职责
+5. 然后再输出完整代码
+
+禁止：
+- 直接甩零散代码片段
+- 输出伪代码冒充可运行代码
+- 跳过边界说明

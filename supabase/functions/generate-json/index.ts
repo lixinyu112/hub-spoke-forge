@@ -64,8 +64,8 @@ Deno.serve(async (req) => {
     // ============================================================
     // 【配置项修改位置】自定义 LLM API 配置
     // ============================================================
-    const LLM_API_BASE = 'https://api.babelark.com/v1';
-    const LLM_MODEL = 'gemini-3.1-flash-lite-preview';
+    const LLM_API_BASE = 'https://api.openai.com/v1';
+    const LLM_MODEL = 'gpt-4o-mini';
 
     const CUSTOM_LLM_API_KEY = (Deno.env.get('CUSTOM_LLM_API_KEY') ?? '')
       .trim()

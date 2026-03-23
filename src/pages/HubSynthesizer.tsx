@@ -10,6 +10,7 @@ import { ValidationBar } from "@/components/ValidationBar";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useProject } from "@/contexts/ProjectContext";
 import { getThemes, getSpokes, getComponentSpecs, createHub } from "@/lib/api";
+import { generateJson, saveJsonRecord } from "@/lib/generate";
 import { toast } from "@/hooks/use-toast";
 import type { Theme, Spoke, ComponentSpec } from "@/lib/api";
 import { PromptConfigButton } from "@/components/PromptConfigButton";
@@ -45,7 +46,7 @@ export default function HubSynthesizer() {
     setSelectedSpokes((prev) => prev.includes(id) ? prev.filter((s) => s !== id) : [...prev, id]);
   };
 
-  const handleGenerate = () => {
+  const handleGenerate = async () => {
     if (!selectedTheme) {
       toast({ title: "请选择主题", variant: "destructive" });
       return;
@@ -53,33 +54,59 @@ export default function HubSynthesizer() {
     setLoading(true);
     setOutput("");
     setValidation("idle");
-    setTimeout(async () => {
-      const selectedSpokeData = spokes.filter((s) => selectedSpokes.includes(s.id));
-      const hubJson = {
-        type: "hub",
-        title: themes.find((t) => t.id === selectedTheme)?.name + " — Hub",
-        slug: `/${themes.find((t) => t.id === selectedTheme)?.name?.toLowerCase().replace(/\s+/g, '-')}`,
-        meta_description: context || "Hub 页面概述。",
-        spoke_links: selectedSpokeData.map((s) => ({ id: s.id, title: s.title, slug: s.slug })),
-      };
-      const json = JSON.stringify(hubJson, null, 2);
-      setOutput(json);
-      setLoading(false);
-      setValidation(Math.random() > 0.3 ? "passed" : "failed");
 
-      try {
-        await createHub({
-          theme_id: selectedTheme,
-          title: hubJson.title,
-          slug: hubJson.slug,
-          json_data: hubJson,
-          status: "generated",
-        });
-        toast({ title: "Hub 已保存到数据库" });
-      } catch (e) {
-        console.error(e);
-      }
-    }, 2000);
+    try {
+      const selectedSpokeData = spokes.filter((s) => selectedSpokes.includes(s.id));
+      
+      // 构建 Spoke 数据作为飞书内容输入
+      const spokeContent = JSON.stringify(
+        selectedSpokeData.map((s) => ({
+          title: s.title,
+          slug: s.slug,
+          json_data: s.json_data,
+        })),
+        null,
+        2
+      );
+
+      // 调用 AI 生成 Hub JSON
+      const result = await generateJson({
+        type: "hub",
+        feishu_content: spokeContent,
+        custom_prompt: prompt || undefined,
+        context: context || undefined,
+      });
+
+      const generatedJson = result.generated_json;
+      const json = JSON.stringify(generatedJson, null, 2);
+      setOutput(json);
+      setValidation(generatedJson?.title ? "passed" : "failed");
+
+      // 保存到 json_records 表
+      await saveJsonRecord({
+        type: "hub",
+        feishu_content: spokeContent,
+        prompt_content: result.prompt_used || prompt,
+        generated_json: generatedJson,
+      });
+
+      // 保存到 hubs 表
+      await createHub({
+        theme_id: selectedTheme,
+        title: generatedJson?.title || themes.find((t) => t.id === selectedTheme)?.name + " — Hub",
+        slug: generatedJson?.slug || null,
+        json_data: generatedJson,
+        status: "generated",
+      });
+      toast({ title: "Hub 已生成并保存" });
+    } catch (e: any) {
+      console.error(e);
+      setValidation("failed");
+      setOutput(JSON.stringify({ error: e.message }, null, 2));
+      toast({ title: "生成失败", description: e.message, variant: "destructive" });
+    } finally {
+      setLoading(false);
+    }
   };
 
   const parsedOutput = output ? (() => { try { return JSON.parse(output); } catch { return null; } })() : null;

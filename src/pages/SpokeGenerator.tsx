@@ -182,21 +182,46 @@ export default function SpokeGenerator() {
     const results: { title: string; success: boolean }[] = [];
     for (let i = 0; i < selectedDocs.length; i++) {
       const doc = feishuDocs.find((d) => d.token === selectedDocs[i]);
-      const title = doc?.name || `Spoke ${i + 1}`;
-      await new Promise((r) => setTimeout(r, 1200));
+      const docTitle = doc?.name || `Spoke ${i + 1}`;
       try {
-        const json = JSON.parse(MOCK_OUTPUT(title));
+        // 获取飞书文档内容
+        let feishuContent = docTitle;
+        if (doc) {
+          try {
+            const docRes = await fetchFeishuDocContent(doc.token, doc.type);
+            feishuContent = docRes?.data?.content || JSON.stringify(docRes?.data) || docTitle;
+          } catch { /* fallback to title */ }
+        }
+
+        // 调用 AI 生成
+        const result = await generateJson({
+          type: "spoke",
+          feishu_content: feishuContent,
+          custom_prompt: prompt || undefined,
+        });
+        const generatedJson = result.generated_json;
+        const title = generatedJson?.title || docTitle;
+
+        // 保存到 json_records
+        await saveJsonRecord({
+          type: "spoke",
+          feishu_content: feishuContent,
+          prompt_content: result.prompt_used || prompt,
+          generated_json: generatedJson,
+        });
+
+        // 保存到 spokes 表
         await createSpoke({
           theme_id: selectedTheme,
           title,
-          json_data: json,
+          json_data: generatedJson,
           feishu_doc_token: doc?.token || null,
           feishu_doc_title: doc?.name || null,
           status: "generated",
         });
         results.push({ title, success: true });
       } catch {
-        results.push({ title, success: false });
+        results.push({ title: docTitle, success: false });
       }
       setBatchProgress({ total: selectedDocs.length, done: i + 1, results: [...results] });
     }

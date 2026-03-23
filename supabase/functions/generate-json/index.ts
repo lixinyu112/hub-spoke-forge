@@ -61,9 +61,15 @@ Deno.serve(async (req) => {
       });
     }
 
-    const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
-    if (!LOVABLE_API_KEY) {
-      return new Response(JSON.stringify({ error: 'LOVABLE_API_KEY not configured' }), {
+    // ============================================================
+    // 【配置项修改位置】自定义 LLM API 配置
+    // ============================================================
+    const LLM_API_BASE = 'https://api.babelark.com/v1';
+    const LLM_MODEL = 'gemini-3.1-flash-lite-preview';
+
+    const CUSTOM_LLM_API_KEY = Deno.env.get('CUSTOM_LLM_API_KEY');
+    if (!CUSTOM_LLM_API_KEY) {
+      return new Response(JSON.stringify({ error: 'CUSTOM_LLM_API_KEY not configured' }), {
         status: 500,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
@@ -85,14 +91,14 @@ Deno.serve(async (req) => {
       if (context) userMessage += `\n\n补充上下文：${context}`;
     }
 
-    const response = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
+    const response = await fetch(`${LLM_API_BASE}/chat/completions`, {
       method: 'POST',
       headers: {
-        Authorization: `Bearer ${LOVABLE_API_KEY}`,
+        Authorization: `Bearer ${CUSTOM_LLM_API_KEY}`,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        model: 'google/gemini-3-flash-preview',
+        model: LLM_MODEL,
         messages: [
           { role: 'system', content: systemPrompt },
           { role: 'user', content: userMessage },

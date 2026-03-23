@@ -93,6 +93,33 @@ export type Database = {
           },
         ]
       }
+      json_records: {
+        Row: {
+          created_at: string
+          feishu_content: string | null
+          generated_json: Json | null
+          id: string
+          prompt_content: string | null
+          type: string
+        }
+        Insert: {
+          created_at?: string
+          feishu_content?: string | null
+          generated_json?: Json | null
+          id?: string
+          prompt_content?: string | null
+          type: string
+        }
+        Update: {
+          created_at?: string
+          feishu_content?: string | null
+          generated_json?: Json | null
+          id?: string
+          prompt_content?: string | null
+          type?: string
+        }
+        Relationships: []
+      }
       projects: {
         Row: {
           created_at: string

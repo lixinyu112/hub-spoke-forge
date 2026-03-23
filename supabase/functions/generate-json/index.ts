@@ -61,18 +61,9 @@ Deno.serve(async (req) => {
       });
     }
 
-    // ============================================================
-    // 【配置项修改位置】自定义 LLM API 配置
-    // ============================================================
-    const LLM_API_BASE = 'https://api.openai.com/v1';
-    const LLM_MODEL = 'gpt-4o-mini';
-
-    const CUSTOM_LLM_API_KEY = (Deno.env.get('CUSTOM_LLM_API_KEY') ?? '')
-      .trim()
-      .replace(/^['"]|['"]$/g, '');
-
-    if (!CUSTOM_LLM_API_KEY) {
-      return new Response(JSON.stringify({ error: 'CUSTOM_LLM_API_KEY not configured' }), {
+    const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
+    if (!LOVABLE_API_KEY) {
+      return new Response(JSON.stringify({ error: 'LOVABLE_API_KEY not configured' }), {
         status: 500,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
@@ -94,14 +85,14 @@ Deno.serve(async (req) => {
       if (context) userMessage += `\n\n补充上下文：${context}`;
     }
 
-    const response = await fetch(`${LLM_API_BASE}/chat/completions`, {
+    const response = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
       method: 'POST',
       headers: {
-        Authorization: `Bearer ${CUSTOM_LLM_API_KEY}`,
+        Authorization: `Bearer ${LOVABLE_API_KEY}`,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        model: LLM_MODEL,
+        model: 'google/gemini-3-flash-preview',
         messages: [
           { role: 'system', content: systemPrompt },
           { role: 'user', content: userMessage },

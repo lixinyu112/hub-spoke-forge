@@ -67,7 +67,10 @@ Deno.serve(async (req) => {
     const LLM_API_BASE = 'https://api.babelark.com/v1';
     const LLM_MODEL = 'gemini-3.1-flash-lite-preview';
 
-    const CUSTOM_LLM_API_KEY = Deno.env.get('CUSTOM_LLM_API_KEY');
+    const CUSTOM_LLM_API_KEY = (Deno.env.get('CUSTOM_LLM_API_KEY') ?? '')
+      .trim()
+      .replace(/^['"]|['"]$/g, '');
+
     if (!CUSTOM_LLM_API_KEY) {
       return new Response(JSON.stringify({ error: 'CUSTOM_LLM_API_KEY not configured' }), {
         status: 500,

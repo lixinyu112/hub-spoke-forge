@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Sparkles, FileText, Search, Loader2, ChevronDown, ChevronRight } from "lucide-react";
+import { Sparkles, FileText, Search, Loader2, ChevronDown, ChevronRight, Pencil } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
@@ -18,12 +18,13 @@ import { generateJson, saveJsonRecord } from "@/lib/generate";
 import { toast } from "@/hooks/use-toast";
 import type { Theme, ComponentSpec } from "@/lib/api";
 import { PromptConfigButton } from "@/components/PromptConfigButton";
-
+import { DocFormDialog } from "@/components/DocFormDialog";
 interface FeishuDoc {
   token: string;
   name: string;
   type: string;
   url?: string;
+  manualContent?: string;
 }
 
 const MOCK_FEISHU_DOCS: FeishuDoc[] = [
@@ -51,11 +52,6 @@ export default function SpokeGenerator() {
   const [cta, setCta] = useState("");
   const [scrapedData, setScrapedData] = useState("");
   const [prompt, setPrompt] = useState("");
-
-  // Manual doc creation
-  const [manualDocName, setManualDocName] = useState("");
-  const [manualDocId, setManualDocId] = useState("");
-  const [manualDocContent, setManualDocContent] = useState("");
 
   // Feishu docs
   const [feishuDocs, setFeishuDocs] = useState<FeishuDoc[]>(MOCK_FEISHU_DOCS);
@@ -92,31 +88,32 @@ export default function SpokeGenerator() {
     setSelectedDocs((prev) => prev.includes(token) ? prev.filter((t) => t !== token) : [...prev, token]);
   };
 
-  const handleCreateManualDoc = () => {
-    if (!manualDocName.trim() || !manualDocId.trim()) {
+  const handleCreateDoc = (data: { token: string; name: string; content: string }) => {
+    if (!data.name || !data.token) {
       toast({ title: "请填写文档名称和文档 ID", variant: "destructive" });
       return;
     }
-    const newDoc: FeishuDoc = {
-      token: manualDocId.trim(),
-      name: manualDocName.trim(),
-      type: "manual",
-    };
     setFeishuDocs((prev) => {
-      if (prev.some((d) => d.token === newDoc.token)) {
+      if (prev.some((d) => d.token === data.token)) {
         toast({ title: "文档 ID 已存在", variant: "destructive" });
         return prev;
       }
-      return [newDoc, ...prev];
+      return [{ token: data.token, name: data.name, type: "manual", manualContent: data.content || undefined }, ...prev];
     });
-    setSelectedDocs((prev) => [...prev, newDoc.token]);
-    if (manualDocContent.trim()) {
-      setScrapedData(manualDocContent.trim());
-    }
-    setManualDocName("");
-    setManualDocId("");
-    setManualDocContent("");
+    setSelectedDocs((prev) => [...prev, data.token]);
+    if (data.content) setScrapedData(data.content);
     toast({ title: "文档已创建并选中" });
+  };
+
+  const handleEditDoc = (data: { token: string; name: string; content: string }) => {
+    setFeishuDocs((prev) =>
+      prev.map((d) =>
+        d.token === data.token
+          ? { ...d, name: data.name, manualContent: data.content || undefined }
+          : d
+      )
+    );
+    toast({ title: "文档已更新" });
   };
 
   const handleGenerateSingle = async () => {
@@ -298,60 +295,16 @@ export default function SpokeGenerator() {
             </CardContent>
           </Card>
 
-          {/* Manual doc creation */}
-          <Card>
-            <CardHeader className="pb-3">
-              <CardTitle className="text-base flex items-center gap-2">
-                <FileText className="h-4 w-4" />
-                创建文档
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              <div>
-                <Label className="text-xs">文档名称</Label>
-                <Input
-                  placeholder="例如：AWS EC2 部署最佳实践"
-                  value={manualDocName}
-                  onChange={(e) => setManualDocName(e.target.value)}
-                  className="mt-1"
-                />
-              </div>
-              <div>
-                <Label className="text-xs">文档 ID</Label>
-                <Input
-                  placeholder="例如：doxcnXYZ001"
-                  value={manualDocId}
-                  onChange={(e) => setManualDocId(e.target.value)}
-                  className="mt-1 font-mono"
-                />
-              </div>
-              <div>
-                <Label className="text-xs">输入内容</Label>
-                <Textarea
-                  placeholder="在此粘贴文档内容…"
-                  value={manualDocContent}
-                  onChange={(e) => setManualDocContent(e.target.value)}
-                  className="mt-1 min-h-[120px] font-mono text-xs bg-muted/50 border-muted"
-                />
-              </div>
-              <Button
-                variant="outline"
-                className="w-full gap-2"
-                onClick={handleCreateManualDoc}
-              >
-                <FileText className="h-4 w-4" />
-                创建并添加到文档列表
-              </Button>
-            </CardContent>
-          </Card>
-
           {/* Feishu docs */}
           <Card>
             <CardHeader className="pb-3">
               <CardTitle className="text-base flex items-center gap-2">
                 <FileText className="h-4 w-4" />
-                飞书文档
+                文档列表
                 <Badge variant="secondary" className="text-[10px]">{selectedDocs.length} 已选</Badge>
+                <div className="ml-auto">
+                  <DocFormDialog mode="create" onSubmit={handleCreateDoc} />
+                </div>
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-3">
@@ -359,7 +312,7 @@ export default function SpokeGenerator() {
                 <div className="relative flex-1">
                   <Search className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-muted-foreground" />
                   <Input
-                    placeholder="搜索飞书文档…"
+                    placeholder="搜索文档…"
                     value={feishuSearch}
                     onChange={(e) => setFeishuSearch(e.target.value)}
                     className="pl-8 h-9 text-xs"
@@ -373,7 +326,7 @@ export default function SpokeGenerator() {
                 {filteredDocs.map((doc) => (
                   <label
                     key={doc.token}
-                    className="flex items-center gap-3 p-2 rounded-md hover:bg-muted/50 cursor-pointer transition-colors"
+                    className="group flex items-center gap-3 p-2 rounded-md hover:bg-muted/50 cursor-pointer transition-colors"
                   >
                     <Checkbox
                       checked={selectedDocs.includes(doc.token)}
@@ -383,6 +336,21 @@ export default function SpokeGenerator() {
                       <p className="text-sm truncate">{doc.name}</p>
                       <p className="text-[10px] text-muted-foreground font-mono">{doc.token}</p>
                     </div>
+                    <DocFormDialog
+                      mode="edit"
+                      initialData={{ token: doc.token, name: doc.name, content: doc.manualContent || "" }}
+                      onSubmit={handleEditDoc}
+                      trigger={
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity shrink-0"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          <Pencil className="h-3 w-3" />
+                        </Button>
+                      }
+                    />
                     <Badge variant="outline" className="text-[10px] shrink-0">{doc.type}</Badge>
                   </label>
                 ))}

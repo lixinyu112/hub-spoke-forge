@@ -52,6 +52,11 @@ export default function SpokeGenerator() {
   const [scrapedData, setScrapedData] = useState("");
   const [prompt, setPrompt] = useState("");
 
+  // Manual doc creation
+  const [manualDocName, setManualDocName] = useState("");
+  const [manualDocId, setManualDocId] = useState("");
+  const [manualDocContent, setManualDocContent] = useState("");
+
   // Feishu docs
   const [feishuDocs, setFeishuDocs] = useState<FeishuDoc[]>(MOCK_FEISHU_DOCS);
   const [feishuSearch, setFeishuSearch] = useState("");
@@ -85,6 +90,33 @@ export default function SpokeGenerator() {
 
   const toggleDoc = (token: string) => {
     setSelectedDocs((prev) => prev.includes(token) ? prev.filter((t) => t !== token) : [...prev, token]);
+  };
+
+  const handleCreateManualDoc = () => {
+    if (!manualDocName.trim() || !manualDocId.trim()) {
+      toast({ title: "请填写文档名称和文档 ID", variant: "destructive" });
+      return;
+    }
+    const newDoc: FeishuDoc = {
+      token: manualDocId.trim(),
+      name: manualDocName.trim(),
+      type: "manual",
+    };
+    setFeishuDocs((prev) => {
+      if (prev.some((d) => d.token === newDoc.token)) {
+        toast({ title: "文档 ID 已存在", variant: "destructive" });
+        return prev;
+      }
+      return [newDoc, ...prev];
+    });
+    setSelectedDocs((prev) => [...prev, newDoc.token]);
+    if (manualDocContent.trim()) {
+      setScrapedData(manualDocContent.trim());
+    }
+    setManualDocName("");
+    setManualDocId("");
+    setManualDocContent("");
+    toast({ title: "文档已创建并选中" });
   };
 
   const handleGenerateSingle = async () => {
@@ -263,6 +295,53 @@ export default function SpokeGenerator() {
                   )}
                 </SelectContent>
               </Select>
+            </CardContent>
+          </Card>
+
+          {/* Manual doc creation */}
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base flex items-center gap-2">
+                <FileText className="h-4 w-4" />
+                创建文档
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <div>
+                <Label className="text-xs">文档名称</Label>
+                <Input
+                  placeholder="例如：AWS EC2 部署最佳实践"
+                  value={manualDocName}
+                  onChange={(e) => setManualDocName(e.target.value)}
+                  className="mt-1"
+                />
+              </div>
+              <div>
+                <Label className="text-xs">文档 ID</Label>
+                <Input
+                  placeholder="例如：doxcnXYZ001"
+                  value={manualDocId}
+                  onChange={(e) => setManualDocId(e.target.value)}
+                  className="mt-1 font-mono"
+                />
+              </div>
+              <div>
+                <Label className="text-xs">输入内容</Label>
+                <Textarea
+                  placeholder="在此粘贴文档内容…"
+                  value={manualDocContent}
+                  onChange={(e) => setManualDocContent(e.target.value)}
+                  className="mt-1 min-h-[120px] font-mono text-xs bg-muted/50 border-muted"
+                />
+              </div>
+              <Button
+                variant="outline"
+                className="w-full gap-2"
+                onClick={handleCreateManualDoc}
+              >
+                <FileText className="h-4 w-4" />
+                创建并添加到文档列表
+              </Button>
             </CardContent>
           </Card>
 

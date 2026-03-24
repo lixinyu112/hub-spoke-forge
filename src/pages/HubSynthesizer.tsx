@@ -208,7 +208,7 @@ export default function HubSynthesizer() {
         <div className="flex flex-col gap-3 min-h-0">
           <ValidationBar
             status={validation}
-            message={validation === "passed" ? "✅ Schema 验证通过" : validation === "failed" ? "❌ 验证失败：缺少必填字段 'title'" : undefined}
+            message={validation === "passed" ? "✅ Schema 验证通过" : validation === "failed" ? "❌ 验证失败：返回内容不是有效的 JSON 对象" : undefined}
           />
           <Card className="flex-1 min-h-0 flex flex-col">
             <Tabs defaultValue="json" className="flex-1 flex flex-col">

@@ -92,6 +92,33 @@ export default function SpokeGenerator() {
     setSelectedDocs((prev) => prev.includes(token) ? prev.filter((t) => t !== token) : [...prev, token]);
   };
 
+  const handleCreateManualDoc = () => {
+    if (!manualDocName.trim() || !manualDocId.trim()) {
+      toast({ title: "请填写文档名称和文档 ID", variant: "destructive" });
+      return;
+    }
+    const newDoc: FeishuDoc = {
+      token: manualDocId.trim(),
+      name: manualDocName.trim(),
+      type: "manual",
+    };
+    setFeishuDocs((prev) => {
+      if (prev.some((d) => d.token === newDoc.token)) {
+        toast({ title: "文档 ID 已存在", variant: "destructive" });
+        return prev;
+      }
+      return [newDoc, ...prev];
+    });
+    setSelectedDocs((prev) => [...prev, newDoc.token]);
+    if (manualDocContent.trim()) {
+      setScrapedData(manualDocContent.trim());
+    }
+    setManualDocName("");
+    setManualDocId("");
+    setManualDocContent("");
+    toast({ title: "文档已创建并选中" });
+  };
+
   const handleGenerateSingle = async () => {
     if (!selectedTheme) {
       toast({ title: "请选择主题", variant: "destructive" });

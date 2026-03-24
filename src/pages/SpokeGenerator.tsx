@@ -305,8 +305,11 @@ export default function SpokeGenerator() {
             <CardHeader className="pb-3">
               <CardTitle className="text-base flex items-center gap-2">
                 <FileText className="h-4 w-4" />
-                飞书文档
+                文档列表
                 <Badge variant="secondary" className="text-[10px]">{selectedDocs.length} 已选</Badge>
+                <div className="ml-auto">
+                  <DocFormDialog mode="create" onSubmit={handleCreateDoc} />
+                </div>
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-3">
@@ -314,7 +317,7 @@ export default function SpokeGenerator() {
                 <div className="relative flex-1">
                   <Search className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-muted-foreground" />
                   <Input
-                    placeholder="搜索飞书文档…"
+                    placeholder="搜索文档…"
                     value={feishuSearch}
                     onChange={(e) => setFeishuSearch(e.target.value)}
                     className="pl-8 h-9 text-xs"
@@ -328,7 +331,7 @@ export default function SpokeGenerator() {
                 {filteredDocs.map((doc) => (
                   <label
                     key={doc.token}
-                    className="flex items-center gap-3 p-2 rounded-md hover:bg-muted/50 cursor-pointer transition-colors"
+                    className="group flex items-center gap-3 p-2 rounded-md hover:bg-muted/50 cursor-pointer transition-colors"
                   >
                     <Checkbox
                       checked={selectedDocs.includes(doc.token)}
@@ -338,6 +341,21 @@ export default function SpokeGenerator() {
                       <p className="text-sm truncate">{doc.name}</p>
                       <p className="text-[10px] text-muted-foreground font-mono">{doc.token}</p>
                     </div>
+                    <DocFormDialog
+                      mode="edit"
+                      initialData={{ token: doc.token, name: doc.name, content: doc.manualContent || "" }}
+                      onSubmit={handleEditDoc}
+                      trigger={
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity shrink-0"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          <Pencil className="h-3 w-3" />
+                        </Button>
+                      }
+                    />
                     <Badge variant="outline" className="text-[10px] shrink-0">{doc.type}</Badge>
                   </label>
                 ))}

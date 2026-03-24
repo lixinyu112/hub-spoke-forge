@@ -6,45 +6,166 @@ const corsHeaders = {
 };
 
 // ============================================================
-// 【配置项修改位置】Spoke / Hub JSON 规范 prompt
+// 【配置项修改位置】Tripo_Schema — Spoke / Hub JSON 规范 prompt
+// 基于 Tripo3D Hub-Spoke 内容系统 API 与组件规范
 // ============================================================
-const SPOKE_SCHEMA_PROMPT = `你是一个 SEO 内容专家。请根据提供的飞书文档内容，生成一个符合以下 JSON Schema 的 Spoke 页面 JSON：
-{
-  "type": "spoke",
-  "title": "页面标题（含目标关键词）",
-  "slug": "/url-friendly-slug",
-  "meta_description": "160字符以内的页面描述",
-  "sections": [
-    { "heading": "章节标题", "body": "章节正文内容" }
-  ],
-  "faq": [
-    { "question": "常见问题", "answer": "回答" }
-  ],
-  "cta": { "text": "行动号召按钮文案", "url": "#" }
-}
-请确保：
-1. 内容基于飞书文档原文，不要凭空编造
-2. 合理拆分为3-6个章节
-3. 生成2-4个FAQ
-4. 只输出合法JSON，不要附加说明文字`;
+const SPOKE_SCHEMA_PROMPT = `你是一个 SEO 内容专家。请根据提供的飞书文档内容，生成一个符合 Tripo3D Spoke 页面规范的 JSON。
 
-const HUB_SCHEMA_PROMPT = `你是一个 SEO 内容专家。请根据提供的 Spoke 页面数据和补充上下文，生成一个符合以下 JSON Schema 的 Hub 聚合页面 JSON：
+## Spoke 页面 JSON Schema
+
 {
-  "type": "hub",
-  "title": "Hub 页面标题",
-  "slug": "/hub-url-slug",
-  "meta_description": "160字符以内的页面描述",
-  "introduction": "Hub 页面简介段落",
-  "spoke_links": [
-    { "title": "Spoke标题", "slug": "/spoke-slug", "summary": "一句话摘要" }
+  "slug": "spoke-url-slug",
+  "hubSlug": "所属hub的slug",
+  "type": "spoke",
+  "title": "页面主标题（含目标关键词）",
+  "description": "页面描述文案",
+  "meta": {
+    "title": "SEO标题 | Tripo3D",
+    "description": "160字符以内的SEO描述",
+    "keywords": ["关键词1", "关键词2"],
+    "ogImage": "OG图片URL（可选）"
+  },
+  "breadcrumb": [
+    { "label": "首页", "url": "/" },
+    { "label": "Hub名称", "url": "/hub-slug" },
+    { "label": "当前页面", "url": "/hub-slug/spoke-slug" }
   ],
-  "cta": { "text": "行动号召按钮文案", "url": "#" }
+  "components": [
+    // 组件数组，按页面结构顺序排列
+  ],
+  "nextSpoke": { "title": "下一篇标题", "url": "/path", "thumbnail": "缩略图URL" },
+  "previousSpoke": { "title": "上一篇标题", "url": "/path", "thumbnail": "缩略图URL" },
+  "lastUpdated": "ISO 8601时间"
 }
-请确保：
+
+## 可用组件类型（在 components 数组中使用）
+
+每个组件格式: { "id": "唯一ID", "type": "组件类型", "props": { ... } }
+
+1. **articleHeader** — 文章头部（Spoke必需，放在首位）
+   props: { title, subtitle?, author?: { name, avatar?, url? }, publishDate, updateDate?, readTime, coverImage?, tags?: string[], difficulty?: "入门"|"中级"|"高级" }
+
+2. **contentBlock** — Markdown正文内容块
+   props: { content: "Markdown格式正文" }
+
+3. **imageGallery** — 图片画廊
+   props: { title?, images: [{ src, alt, caption? }], columns?: 2|3|4, lightbox?: boolean, studioModelUrl?: string }
+
+4. **tipBox** — 提示框
+   props: { variant: "info"|"success"|"warning"|"error", icon?: "lightbulb"|"check"|"alert"|"error", title?, content: "纯文本内容" }
+
+5. **codeBlock** — 代码块
+   props: { title?, language: string, code: string, showLineNumbers?: boolean, highlightLines?: number[] }
+
+6. **stepByStep** — 步骤指南
+   props: { title, steps: [{ number, title, description, image? }], layout?: "vertical"|"horizontal" }
+
+7. **videoEmbed** — 视频嵌入
+   props: { title?, youtubeId?, bilibiliId?, videoUrl?, thumbnail?, duration?, autoplay?: boolean, aspectRatio?: "16:9"|"4:3"|"1:1" }
+
+8. **faq** — 常见问题
+   props: { title, items: [{ question, answer }], defaultExpanded?: boolean }
+
+9. **relatedLinks** — 相关链接
+   props: { title, links: [{ title, url, description?, thumbnail?, tag?, external?: boolean }], layout?: "list"|"cards", maxItems?: number }
+
+10. **downloadSection** — 下载区
+    props: { name, description?, hubLabel?, columns?: 2|3|4, plugins: [{ tags?: string[], imageUrl, title?, description?, level: "Intermediate"|"Advanced", downloadText?, downloadUrl, downloadIconUrl? }] }
+
+11. **videoSection** — 视频列表
+    props: { title, subtitle?, videos: [{ thumbnail, title, duration, youtubeId?, link }], layout?: "grid"|"carousel" }
+
+12. **ctaBanner** — 行动号召横幅
+    props: { title, subtitle?, primaryCta: { text, url }, secondaryCta?: { text, url }, backgroundImage?, backgroundColor?, variant?: "default"|"gradient"|"dark" }
+
+13. **categoryCards** — 分类卡片
+    props: { title?, subtitle?, sub?: { label, items: string[] }, cards: [{ icon?, title, description, link, tag? }], layout?: "grid"|"list", columns?: 2|3|4 }
+
+14. **overview** — 概述
+    props: { title, subtitle?, description, subItems: [{ label, description, icon? }] }
+
+15. **tocNav** — 页面导航
+    props: { title, items: [{ name, url, description? }] }
+
+## 生成要求
+1. 内容基于飞书文档原文，不要凭空编造
+2. 第一个组件必须是 articleHeader
+3. 使用 contentBlock 承载主要正文（Markdown格式）
+4. 合理穿插 tipBox、imageGallery、codeBlock、stepByStep 等组件丰富页面
+5. 末尾添加 relatedLinks 和/或 ctaBanner
+6. 生成2-4个FAQ（使用 faq 组件）
+7. 只输出合法JSON，不要附加说明文字`;
+
+const HUB_SCHEMA_PROMPT = `你是一个 SEO 内容专家。请根据提供的 Spoke 页面数据和补充上下文，生成一个符合 Tripo3D Hub 聚合页面规范的 JSON。
+
+## Hub 页面 JSON Schema
+
+{
+  "slug": "hub-url-slug",
+  "type": "hub",
+  "title": "Hub 页面主标题",
+  "description": "Hub 页面描述",
+  "meta": {
+    "title": "SEO标题 | Tripo3D",
+    "description": "160字符以内的SEO描述",
+    "keywords": ["关键词1", "关键词2"],
+    "ogImage": "OG图片URL（可选）"
+  },
+  "breadcrumb": [
+    { "label": "首页", "url": "/" },
+    { "label": "当前Hub", "url": "/hub-slug" }
+  ],
+  "components": [
+    // 组件数组，按页面结构顺序排列
+  ],
+  "relatedHubs": [
+    { "title": "相关Hub标题", "slug": "hub-slug", "description": "简短描述", "thumbnail": "缩略图URL" }
+  ],
+  "lastUpdated": "ISO 8601时间"
+}
+
+## 可用组件类型（在 components 数组中使用）
+
+每个组件格式: { "id": "唯一ID", "type": "组件类型", "props": { ... } }
+
+1. **hero** — 页面顶部横幅（Hub必需，放在首位）
+   props: { title, description, backgroundImage?, backgroundColor?, cta?: { text, url, variant: "primary"|"secondary" } }
+
+2. **categoryCards** — 分类卡片（展示Spoke入口）
+   props: { title?, subtitle?, sub?: { label, items: string[] }, cards: [{ icon?, title, description, link, tag? }], layout?: "grid"|"list", columns?: 2|3|4 }
+
+3. **tutorialList** — 教程列表
+   props: { title, subtitle?, sub?: { label, items: string[] }, layout?: "grid"|"list", tutorials: [{ icon?, title, description, duration?, difficulty?, link, tag? }] }
+
+4. **videoSection** — 视频列表
+   props: { title, subtitle?, videos: [{ thumbnail, title, duration, youtubeId?, link }], layout?: "grid"|"carousel" }
+
+5. **tipBox** — 提示框
+   props: { variant: "info"|"success"|"warning"|"error", icon?: "lightbulb"|"check"|"alert"|"error", title?, content: "纯文本" }
+
+6. **faq** — 常见问题
+   props: { title, items: [{ question, answer }], defaultExpanded?: boolean }
+
+7. **ctaBanner** — 行动号召横幅
+   props: { title, subtitle?, primaryCta: { text, url }, secondaryCta?: { text, url }, backgroundImage?, backgroundColor?, variant?: "default"|"gradient"|"dark" }
+
+8. **overview** — 概述
+   props: { title, subtitle?, description, subItems: [{ label, description, icon? }] }
+
+9. **tocNav** — 页面导航
+   props: { title, items: [{ name, url, description? }] }
+
+10. **downloadSection** — 下载区
+    props: { name, description?, hubLabel?, columns?: 2|3|4, plugins: [{ tags?: string[], imageUrl, title?, description?, level, downloadText?, downloadUrl }] }
+
+## 生成要求
 1. 内容基于提供的 Spoke 数据综合归纳
-2. introduction 段落概括全局主题
-3. 每个 spoke_link 都有简明的 summary
-4. 只输出合法JSON，不要附加说明文字`;
+2. 第一个组件必须是 hero
+3. 使用 categoryCards 展示各 Spoke 页面入口
+4. 可选添加 tutorialList、videoSection、overview、tocNav 丰富页面
+5. 末尾添加 faq 和 ctaBanner
+6. relatedHubs 列出相关主题Hub
+7. 只输出合法JSON，不要附加说明文字`;
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {

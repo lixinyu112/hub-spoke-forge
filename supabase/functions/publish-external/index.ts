@@ -8,6 +8,70 @@ const corsHeaders = {
 
 const APP_ID = "tripo";
 
+const LANG_NAMES: Record<string, string> = {
+  zh: "简体中文", en: "English", ja: "日本語", ko: "한국어",
+  es: "Español", pt: "Português", ru: "Русский",
+};
+
+/**
+ * Translate JSON content to the target language using LLM.
+ * Returns translated JSON object, or the original if translation fails or lang is zh.
+ */
+async function translateJson(jsonData: any, targetLang: string): Promise<any> {
+  if (targetLang === "zh") return jsonData; // 源语言，无需翻译
+
+  const llmApiKey = Deno.env.get("CUSTOM_LLM_API_KEY");
+  if (!llmApiKey) {
+    console.warn("CUSTOM_LLM_API_KEY not set, skipping translation");
+    return jsonData;
+  }
+
+  const langName = LANG_NAMES[targetLang] || targetLang;
+  const prompt = `你是一个专业翻译引擎。请将以下 JSON 中所有面向用户的文本内容翻译为 ${langName}（语言代码：${targetLang}）。
+规则：
+1. 只翻译 JSON 值中的自然语言文本（标题、描述、段落、按钮文案等）
+2. 不要翻译 JSON 的键名（key）
+3. 不要翻译 URL、slug、技术标识符、CSS类名、图片路径
+4. 不要翻译 type、status 等枚举值
+5. 保持 JSON 结构完全不变
+6. 直接输出翻译后的 JSON，不要添加任何解释
+
+JSON 内容：
+${JSON.stringify(jsonData, null, 2)}`;
+
+  try {
+    const resp = await fetch("https://api.babelark.com/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${llmApiKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        model: "gemini-3.1-flash-lite-preview",
+        messages: [
+          { role: "system", content: "你是一个精确的 JSON 翻译引擎，只输出翻译后的 JSON。" },
+          { role: "user", content: prompt },
+        ],
+        temperature: 0.1,
+      }),
+    });
+
+    if (!resp.ok) {
+      console.error("Translation API error:", resp.status, await resp.text());
+      return jsonData;
+    }
+
+    const result = await resp.json();
+    let content = result.choices?.[0]?.message?.content || "";
+    // Strip markdown code fences if present
+    content = content.replace(/^```(?:json)?\s*\n?/i, "").replace(/\n?```\s*$/i, "").trim();
+    return JSON.parse(content);
+  } catch (err) {
+    console.error("Translation failed:", err);
+    return jsonData;
+  }
+}
+
 // Pure JS MD5 implementation (no dependencies, Deno-compatible)
 function md5(input: string): string {
   const bytes = new TextEncoder().encode(input);

@@ -93,31 +93,32 @@ export default function SpokeGenerator() {
     setSelectedDocs((prev) => prev.includes(token) ? prev.filter((t) => t !== token) : [...prev, token]);
   };
 
-  const handleCreateManualDoc = () => {
-    if (!manualDocName.trim() || !manualDocId.trim()) {
+  const handleCreateDoc = (data: { token: string; name: string; content: string }) => {
+    if (!data.name || !data.token) {
       toast({ title: "请填写文档名称和文档 ID", variant: "destructive" });
       return;
     }
-    const newDoc: FeishuDoc = {
-      token: manualDocId.trim(),
-      name: manualDocName.trim(),
-      type: "manual",
-    };
     setFeishuDocs((prev) => {
-      if (prev.some((d) => d.token === newDoc.token)) {
+      if (prev.some((d) => d.token === data.token)) {
         toast({ title: "文档 ID 已存在", variant: "destructive" });
         return prev;
       }
-      return [newDoc, ...prev];
+      return [{ token: data.token, name: data.name, type: "manual", manualContent: data.content || undefined }, ...prev];
     });
-    setSelectedDocs((prev) => [...prev, newDoc.token]);
-    if (manualDocContent.trim()) {
-      setScrapedData(manualDocContent.trim());
-    }
-    setManualDocName("");
-    setManualDocId("");
-    setManualDocContent("");
+    setSelectedDocs((prev) => [...prev, data.token]);
+    if (data.content) setScrapedData(data.content);
     toast({ title: "文档已创建并选中" });
+  };
+
+  const handleEditDoc = (data: { token: string; name: string; content: string }) => {
+    setFeishuDocs((prev) =>
+      prev.map((d) =>
+        d.token === data.token
+          ? { ...d, name: data.name, manualContent: data.content || undefined }
+          : d
+      )
+    );
+    toast({ title: "文档已更新" });
   };
 
   const handleGenerateSingle = async () => {

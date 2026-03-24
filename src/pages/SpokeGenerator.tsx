@@ -24,6 +24,7 @@ interface FeishuDoc {
   name: string;
   type: string;
   url?: string;
+  manualContent?: string;
 }
 
 const MOCK_FEISHU_DOCS: FeishuDoc[] = [

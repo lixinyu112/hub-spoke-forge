@@ -103,6 +103,8 @@ export default function ContentBrowser() {
     setPublishing(true);
     try {
       const items = getSelectedData();
+
+      // 1. 存储到数据库
       const pubs = items.flatMap((item) =>
         languages.map((lang) => ({
           project_id: currentProject.id,
@@ -115,7 +117,33 @@ export default function ContentBrowser() {
         }))
       );
       await createPublicationsBatch(pubs);
-      toast({ title: `已发布 ${items.length} 项内容 × ${languages.length} 种语言` });
+
+      // 2. 调用外部 API 推送
+      try {
+        const { data: extResult, error: extError } = await supabase.functions.invoke("publish-external", {
+          body: {
+            items: items.map((item) => ({
+              id: item.id,
+              type: item.type,
+              title: item.title,
+              json_data: item.json_data,
+            })),
+            languages,
+          },
+        });
+        if (extError) {
+          console.error("外部 API 推送失败:", extError);
+          toast({ title: `已保存到数据库，但外部推送失败: ${extError.message}`, variant: "destructive" });
+        } else if (extResult?.failed > 0) {
+          toast({ title: `已发布 ${items.length} 项 × ${languages.length} 语言，外部推送部分失败 (${extResult.failed}/${extResult.total})`, variant: "destructive" });
+        } else {
+          toast({ title: `已发布 ${items.length} 项内容 × ${languages.length} 种语言（含外部推送）` });
+        }
+      } catch (extErr) {
+        console.error("外部 API 调用异常:", extErr);
+        toast({ title: "已保存到数据库，但外部推送异常", variant: "destructive" });
+      }
+
       setSelectedItems(new Set());
       setPublishDialogOpen(false);
     } catch (e) {

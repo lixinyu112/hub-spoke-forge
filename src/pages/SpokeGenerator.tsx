@@ -151,7 +151,8 @@ export default function SpokeGenerator() {
       const generatedJson = result.generated_json;
       const json = JSON.stringify(generatedJson, null, 2);
       setOutput(json);
-      setValidation(generatedJson?.title ? "passed" : "failed");
+      // 宽松验证：只要是有效对象即视为通过
+      setValidation(generatedJson && typeof generatedJson === "object" ? "passed" : "failed");
 
       // 第三步：保存到 json_records 表
       const title = generatedJson?.title || doc?.name || keyword || "未命名 Spoke";

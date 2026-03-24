@@ -52,6 +52,11 @@ export default function SpokeGenerator() {
   const [scrapedData, setScrapedData] = useState("");
   const [prompt, setPrompt] = useState("");
 
+  // Manual doc creation
+  const [manualDocName, setManualDocName] = useState("");
+  const [manualDocId, setManualDocId] = useState("");
+  const [manualDocContent, setManualDocContent] = useState("");
+
   // Feishu docs
   const [feishuDocs, setFeishuDocs] = useState<FeishuDoc[]>(MOCK_FEISHU_DOCS);
   const [feishuSearch, setFeishuSearch] = useState("");

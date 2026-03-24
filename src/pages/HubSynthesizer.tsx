@@ -191,7 +191,7 @@ export default function HubSynthesizer() {
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="hub-default">Hub — 默认 Schema v1</SelectItem>
+                  <SelectItem value="hub-default">Tripo_Schema (内置默认)</SelectItem>
                   {hubSpecs.map((s) => (
                     <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
                   ))}

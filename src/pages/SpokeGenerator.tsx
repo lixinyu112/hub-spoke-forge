@@ -349,7 +349,7 @@ export default function SpokeGenerator() {
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="spoke-default">Spoke — 默认 Schema v1</SelectItem>
+                  <SelectItem value="spoke-default">Tripo_Schema (内置默认)</SelectItem>
                   {spokeSpecs.map((s) => (
                     <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
                   ))}

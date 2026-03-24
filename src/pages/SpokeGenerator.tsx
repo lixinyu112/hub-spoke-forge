@@ -300,53 +300,6 @@ export default function SpokeGenerator() {
             </CardContent>
           </Card>
 
-          {/* Manual doc creation */}
-          <Card>
-            <CardHeader className="pb-3">
-              <CardTitle className="text-base flex items-center gap-2">
-                <FileText className="h-4 w-4" />
-                创建文档
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              <div>
-                <Label className="text-xs">文档名称</Label>
-                <Input
-                  placeholder="例如：AWS EC2 部署最佳实践"
-                  value={manualDocName}
-                  onChange={(e) => setManualDocName(e.target.value)}
-                  className="mt-1"
-                />
-              </div>
-              <div>
-                <Label className="text-xs">文档 ID</Label>
-                <Input
-                  placeholder="例如：doxcnXYZ001"
-                  value={manualDocId}
-                  onChange={(e) => setManualDocId(e.target.value)}
-                  className="mt-1 font-mono"
-                />
-              </div>
-              <div>
-                <Label className="text-xs">输入内容</Label>
-                <Textarea
-                  placeholder="在此粘贴文档内容…"
-                  value={manualDocContent}
-                  onChange={(e) => setManualDocContent(e.target.value)}
-                  className="mt-1 min-h-[120px] font-mono text-xs bg-muted/50 border-muted"
-                />
-              </div>
-              <Button
-                variant="outline"
-                className="w-full gap-2"
-                onClick={handleCreateManualDoc}
-              >
-                <FileText className="h-4 w-4" />
-                创建并添加到文档列表
-              </Button>
-            </CardContent>
-          </Card>
-
           {/* Feishu docs */}
           <Card>
             <CardHeader className="pb-3">

@@ -72,6 +72,9 @@ export function PublishDialog({ open, onOpenChange, selectedCount, publishing, o
                 </label>
               ))}
             </div>
+            {selectedLangs.size === 0 && (
+              <p className="text-xs text-destructive mt-2">请至少选择一种语言</p>
+            )}
           </div>
         </div>
         <DialogFooter>

@@ -18,7 +18,7 @@ import { generateJson, saveJsonRecord } from "@/lib/generate";
 import { toast } from "@/hooks/use-toast";
 import type { Theme, ComponentSpec } from "@/lib/api";
 import { PromptConfigButton } from "@/components/PromptConfigButton";
-
+import { DocFormDialog } from "@/components/DocFormDialog";
 interface FeishuDoc {
   token: string;
   name: string;

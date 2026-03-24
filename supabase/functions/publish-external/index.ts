@@ -243,6 +243,9 @@ serve(async (req) => {
         const sign = md5(baseString);
 
         try {
+          // Translate JSON content to target language
+          const translatedData = await translateJson(item.json_data, lang);
+
           const resp = await fetch(url, {
             method: "POST",
             headers: {
@@ -251,7 +254,7 @@ serve(async (req) => {
               "X-Api-Timestamp": timestamp,
               "Content-Type": "application/json",
             },
-            body: JSON.stringify(item.json_data),
+            body: JSON.stringify(translatedData),
           });
 
           if (!resp.ok) {

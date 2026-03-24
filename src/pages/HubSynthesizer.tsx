@@ -80,7 +80,7 @@ export default function HubSynthesizer() {
       const generatedJson = result.generated_json;
       const json = JSON.stringify(generatedJson, null, 2);
       setOutput(json);
-      setValidation(generatedJson?.title ? "passed" : "failed");
+      setValidation(generatedJson && typeof generatedJson === "object" ? "passed" : "failed");
 
       // 保存到 json_records 表
       await saveJsonRecord({

@@ -126,17 +126,27 @@ export default function HubSynthesizer() {
         prompt_content: pendingSave.promptUsed,
         generated_json: editedJson,
       });
-      await createHub({
-        theme_id: selectedTheme,
+
+      // 检查当前主题下是否已存在 Hub，存在则更新，否则新建
+      const existingHub = await findHubByTheme(selectedTheme);
+      const hubPayload = {
         title: editedJson?.title || themes.find((t) => t.id === selectedTheme)?.name + " — Hub",
         slug: editedJson?.slug || null,
         json_data: editedJson,
         status: "generated",
-      });
+      };
+
+      if (existingHub) {
+        await updateHub(existingHub.id, hubPayload);
+        toast({ title: "Hub 已更新保存（覆盖已有记录）" });
+      } else {
+        await createHub({ ...hubPayload, theme_id: selectedTheme });
+        toast({ title: "Hub 已新建保存" });
+      }
+
       setOutput(editedCode);
       setConfirmed(true);
       setPendingSave(null);
-      toast({ title: "Hub 已确认保存" });
     } catch (e: any) {
       toast({ title: "保存失败", description: e.message, variant: "destructive" });
     }

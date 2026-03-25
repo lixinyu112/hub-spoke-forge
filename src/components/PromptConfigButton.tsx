@@ -31,7 +31,7 @@ export function PromptConfigButton({ value, onChange, onConfirm, placeholder }: 
     onChange(draft);
     onConfirm?.(draft);
     setDirty(false);
-    toast({ title: "Prompt 已保存", description: "后续生成将使用此 System Prompt" });
+    toast({ title: "Prompt 已更新", description: "后续生成将使用此 System Prompt" });
   };
 
   return (

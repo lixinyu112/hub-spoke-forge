@@ -64,7 +64,7 @@ export function PromptConfigButton({ value, onChange, onConfirm, placeholder }: 
               onClick={handleConfirm}
             >
               <Check className="h-3 w-3" />
-              确认保存
+              更新
             </Button>
           </div>
         </div>

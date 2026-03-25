@@ -261,11 +261,28 @@ export default function SpokeGenerator() {
       const feishuContent = contentParts.join("\n\n---\n\n");
       const firstDoc = feishuDocs.find((d) => d.token === selectedDocs[0]);
 
+      // 查找已有 Spoke JSON 作为参考
+      let existingJsonContext = "";
+      if (firstDoc?.token) {
+        try {
+          const { data: existingSpoke } = await import("@/integrations/supabase/client").then(m =>
+            m.supabase.from("spokes").select("json_data").eq("theme_id", selectedTheme).eq("feishu_doc_token", firstDoc.token).maybeSingle()
+          );
+          if (existingSpoke?.json_data) {
+            existingJsonContext = `\n\n【已有 Spoke JSON（请在此基础上修改内容，保留结构）】\n${JSON.stringify(existingSpoke.json_data, null, 2)}`;
+          }
+        } catch (e) {
+          console.warn("查找已有 Spoke JSON 失败:", e);
+        }
+      }
+
+      const contextParts = [scrapedData, existingJsonContext].filter(Boolean).join("\n");
+
       const result = await generateJson({
         type: "spoke",
         feishu_content: feishuContent,
         custom_prompt: prompt || undefined,
-        context: scrapedData || undefined,
+        context: contextParts || undefined,
       });
 
       const generatedJson = result.generated_json;
@@ -361,11 +378,27 @@ export default function SpokeGenerator() {
           } catch { /* fallback to title */ }
         }
 
+        // 查找已有 Spoke JSON 作为参考
+        let existingJsonContext = "";
+        if (doc?.token) {
+          try {
+            const { supabase } = await import("@/integrations/supabase/client");
+            const { data: existingSpoke } = await supabase.from("spokes").select("json_data").eq("theme_id", selectedTheme).eq("feishu_doc_token", doc.token).maybeSingle();
+            if (existingSpoke?.json_data) {
+              existingJsonContext = `\n\n【已有 Spoke JSON（请在此基础上修改内容，保留结构）】\n${JSON.stringify(existingSpoke.json_data, null, 2)}`;
+            }
+          } catch (e) {
+            console.warn("查找已有 Spoke JSON 失败:", e);
+          }
+        }
+
+        const contextParts = [scrapedData, existingJsonContext].filter(Boolean).join("\n");
+
         const result = await generateJson({
           type: "spoke",
           feishu_content: feishuContent,
           custom_prompt: prompt || undefined,
-          context: scrapedData || undefined,
+          context: contextParts || undefined,
         });
         const generatedJson = result.generated_json;
         // 强制 hubSlug 与主题名称一致

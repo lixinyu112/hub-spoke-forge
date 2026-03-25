@@ -134,13 +134,10 @@ export default function SpokeGenerator() {
     for (let i = 0; i < updated.length; i++) {
       const doc = updated[i];
       try {
-        const result = await extractAgent3Code(doc.token);
-        const codeContent = result.agent3_found && result.code_blocks.length > 0
-          ? result.code_blocks.join("\n\n---\n\n")
-          : undefined;
+        const result = await extractFirstCode(doc.token);
+        const codeContent = result.found && result.code_content ? result.code_content : undefined;
 
         if (codeContent) {
-          // Check if doc exists in DB
           const dbDocs = await getDocuments(currentProject.id);
           const exists = dbDocs.some((d: any) => d.token === doc.token);
 
@@ -159,7 +156,7 @@ export default function SpokeGenerator() {
           syncCount++;
         }
       } catch (e) {
-        console.warn(`文档 ${doc.name} Agent3 代码提取失败:`, e);
+        console.warn(`文档 ${doc.name} 代码提取失败:`, e);
         failCount++;
       }
     }
@@ -167,11 +164,11 @@ export default function SpokeGenerator() {
     setFeishuDocs(updated);
     setSyncing(false);
     if (syncCount > 0) {
-      toast({ title: `已同步 ${syncCount} 个文档的 Agent3 代码块${failCount > 0 ? `，${failCount} 个失败` : ""}` });
+      toast({ title: `已同步 ${syncCount} 个文档的代码块${failCount > 0 ? `，${failCount} 个失败` : ""}` });
     } else if (failCount > 0) {
-      toast({ title: `Agent3 代码提取失败（${failCount} 个），请检查飞书应用是否已开通 docx:document:readonly 权限`, variant: "destructive" });
+      toast({ title: `代码提取失败（${failCount} 个），请检查飞书应用权限`, variant: "destructive" });
     } else {
-      toast({ title: "未找到包含 Agent3 的文档" });
+      toast({ title: "未找到包含代码块的文档" });
     }
   };
 

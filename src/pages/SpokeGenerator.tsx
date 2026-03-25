@@ -371,7 +371,7 @@ export default function SpokeGenerator() {
                     className="pl-8 h-9 text-xs"
                   />
                 </div>
-                <Button variant="outline" size="sm" onClick={handleLoadFeishuDocs} disabled={loadingDocs} className="h-9 text-xs">
+                <Button variant="outline" size="sm" onClick={handleLoadDocuments} disabled={loadingDocs} className="h-9 text-xs">
                   {loadingDocs ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : "刷新"}
                 </Button>
               </div>

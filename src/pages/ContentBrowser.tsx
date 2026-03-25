@@ -18,7 +18,7 @@ import { PromptConfigButton } from "@/components/PromptConfigButton";
 import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from "@/components/ui/resizable";
 import { loadPromptConfig, savePromptConfig } from "@/lib/promptConfig";
 
-const THEME_NAME_REGEX = /^[a-z][a-z\-]*$/;
+const THEME_NAME_REGEX = /^[a-z][a-z0-9\-]*$/;
 
 export default function ContentBrowser() {
   const { currentProject } = useProject();
@@ -34,6 +34,7 @@ export default function ContentBrowser() {
   const [publishing, setPublishing] = useState(false);
   const [newThemeName, setNewThemeName] = useState("");
   const [newThemeDesc, setNewThemeDesc] = useState("");
+  const [newThemeFeishuToken, setNewThemeFeishuToken] = useState("");
   const [themeNameError, setThemeNameError] = useState("");
   const [prompt, setPrompt] = useState("");
 
@@ -176,7 +177,7 @@ export default function ContentBrowser() {
   const validateThemeName = (name: string) => {
     if (!name) { setThemeNameError(""); return false; }
     if (!THEME_NAME_REGEX.test(name)) {
-      setThemeNameError("仅允许英文小写字母与中划线（-），且以字母开头");
+      setThemeNameError("仅允许英文小写字母、数字与中划线（-），且以字母开头");
       return false;
     }
     setThemeNameError("");
@@ -192,8 +193,8 @@ export default function ContentBrowser() {
     if (!currentProject || !newThemeName.trim()) return;
     if (!validateThemeName(newThemeName.trim())) return;
     try {
-      const created = await createTheme(currentProject.id, newThemeName.trim(), newThemeDesc.trim() || undefined);
-      setNewThemeName(""); setNewThemeDesc(""); setThemeNameError("");
+      const created = await createTheme(currentProject.id, newThemeName.trim(), newThemeDesc.trim() || undefined, newThemeFeishuToken.trim() || undefined);
+      setNewThemeName(""); setNewThemeDesc(""); setNewThemeFeishuToken(""); setThemeNameError("");
       setThemeDialogOpen(false);
       toast({ title: "主题已创建" });
       await loadTree();
@@ -322,14 +323,15 @@ export default function ContentBrowser() {
           <div className="space-y-3">
             <div>
               <Input
-                placeholder="主题名称（仅英文小写字母与中划线）"
+                placeholder="主题名称（英文小写字母、数字与中划线）"
                 value={newThemeName}
                 onChange={(e) => handleThemeNameChange(e.target.value)}
                 className={themeNameError ? "border-destructive" : ""}
               />
               {themeNameError && <p className="text-xs text-destructive mt-1">{themeNameError}</p>}
-              <p className="text-xs text-muted-foreground mt-1">例如：digital-marketing、seo-guide</p>
+              <p className="text-xs text-muted-foreground mt-1">例如：digital-marketing、seo-guide2</p>
             </div>
+            <Input placeholder="飞书文档 ID（可选）" value={newThemeFeishuToken} onChange={(e) => setNewThemeFeishuToken(e.target.value)} />
             <Input placeholder="描述（可选）" value={newThemeDesc} onChange={(e) => setNewThemeDesc(e.target.value)} />
           </div>
           <DialogFooter>

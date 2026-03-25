@@ -1,0 +1,1 @@
+ALTER TABLE public.themes ADD COLUMN feishu_doc_token text;

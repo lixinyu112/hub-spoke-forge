@@ -282,6 +282,7 @@ export type Database = {
         Row: {
           created_at: string
           description: string | null
+          feishu_doc_token: string | null
           id: string
           name: string
           project_id: string
@@ -290,6 +291,7 @@ export type Database = {
         Insert: {
           created_at?: string
           description?: string | null
+          feishu_doc_token?: string | null
           id?: string
           name: string
           project_id: string
@@ -298,6 +300,7 @@ export type Database = {
         Update: {
           created_at?: string
           description?: string | null
+          feishu_doc_token?: string | null
           id?: string
           name?: string
           project_id?: string

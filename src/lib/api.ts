@@ -13,8 +13,10 @@ export async function getThemes(projectId: string) {
   return data;
 }
 
-export async function createTheme(projectId: string, name: string, description?: string) {
-  const { data, error } = await supabase.from("themes").insert({ project_id: projectId, name, description }).select().single();
+export async function createTheme(projectId: string, name: string, description?: string, feishuDocToken?: string) {
+  const insertData: any = { project_id: projectId, name, description };
+  if (feishuDocToken) insertData.feishu_doc_token = feishuDocToken;
+  const { data, error } = await supabase.from("themes").insert(insertData).select().single();
   if (error) throw error;
   return data;
 }

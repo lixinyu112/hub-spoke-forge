@@ -76,6 +76,8 @@ export default function SpokeGenerator() {
     if (currentProject) savePromptConfig(currentProject.id, "spoke", val);
   };
 
+  const [syncing, setSyncing] = useState(false);
+
   const handleLoadDocuments = async () => {
     if (!currentProject) return;
     setLoadingDocs(true);
@@ -105,57 +107,71 @@ export default function SpokeGenerator() {
         console.warn("飞书 API 文档加载失败:", e);
       }
 
-      // For each API doc not already in DB, extract Agent3 code blocks and upsert
+      // Merge API docs into mapped list (avoid duplicates)
       const existingTokens = new Set(mapped.map((d) => d.token));
-      let syncCount = 0;
       for (const ad of apiDocs) {
-        try {
-          const result = await extractAgent3Code(ad.token);
-          const codeContent = result.agent3_found && result.code_blocks.length > 0
-            ? result.code_blocks.join("\n\n---\n\n")
-            : undefined;
-
-          if (existingTokens.has(ad.token)) {
-            // Update existing doc with Agent3 code content
-            if (codeContent) {
-              await updateDocument(currentProject.id, ad.token, { name: ad.name, content: codeContent });
-              const existing = mapped.find((d) => d.token === ad.token);
-              if (existing) {
-                existing.manualContent = codeContent;
-                existing.name = ad.name;
-              }
-              syncCount++;
-            }
-          } else {
-            // Create new doc with Agent3 code content
-            await createDocument({
-              project_id: currentProject.id,
-              token: ad.token,
-              name: ad.name,
-              type: ad.type || "docx",
-              content: codeContent,
-            });
-            mapped.push({ token: ad.token, name: ad.name, type: ad.type, manualContent: codeContent });
-            syncCount++;
-          }
-        } catch (e) {
-          console.warn(`文档 ${ad.name} Agent3 代码提取失败:`, e);
-          // Still add to list even if extraction fails
-          if (!existingTokens.has(ad.token)) {
-            mapped.push(ad);
-          }
+        if (!existingTokens.has(ad.token)) {
+          mapped.push(ad);
         }
       }
 
       setFeishuDocs(mapped);
-      if (syncCount > 0) {
-        toast({ title: `已同步 ${syncCount} 个文档的 Agent3 代码块` });
-      }
     } catch (e) {
       console.error("Failed to load documents:", e);
       toast({ title: "文档加载失败", variant: "destructive" });
     } finally {
       setLoadingDocs(false);
+    }
+  };
+
+  const handleSyncAgent3 = async () => {
+    if (!currentProject || feishuDocs.length === 0) return;
+    setSyncing(true);
+    let syncCount = 0;
+    let failCount = 0;
+    const updated = [...feishuDocs];
+
+    for (let i = 0; i < updated.length; i++) {
+      const doc = updated[i];
+      try {
+        const result = await extractAgent3Code(doc.token);
+        const codeContent = result.agent3_found && result.code_blocks.length > 0
+          ? result.code_blocks.join("\n\n---\n\n")
+          : undefined;
+
+        if (codeContent) {
+          // Check if doc exists in DB
+          const dbDocs = await getDocuments(currentProject.id);
+          const exists = dbDocs.some((d: any) => d.token === doc.token);
+
+          if (exists) {
+            await updateDocument(currentProject.id, doc.token, { name: doc.name, content: codeContent });
+          } else {
+            await createDocument({
+              project_id: currentProject.id,
+              token: doc.token,
+              name: doc.name,
+              type: doc.type || "docx",
+              content: codeContent,
+            });
+          }
+          updated[i] = { ...doc, manualContent: codeContent };
+          syncCount++;
+        }
+      } catch (e) {
+        console.warn(`文档 ${doc.name} Agent3 代码提取失败:`, e);
+        failCount++;
+      }
+    }
+
+    setFeishuDocs(updated);
+    setSyncing(false);
+    if (syncCount > 0) {
+      toast({ title: `已同步 ${syncCount} 个文档的 Agent3 代码块${failCount > 0 ? `，${failCount} 个失败` : ""}` });
+    } else if (failCount > 0) {
+      toast({ title: `Agent3 代码提取失败（${failCount} 个），请检查飞书应用是否已开通 docx:document:readonly 权限`, variant: "destructive" });
+    } else {
+      toast({ title: "未找到包含 Agent3 的文档" });
     }
   };
 

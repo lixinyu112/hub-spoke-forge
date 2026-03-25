@@ -1,0 +1,1 @@
+ALTER TABLE public.themes ADD CONSTRAINT themes_project_id_name_unique UNIQUE (project_id, name);

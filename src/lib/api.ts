@@ -46,6 +46,18 @@ export async function updateHub(id: string, updates: Partial<TablesInsert<"hubs"
   return data;
 }
 
+export async function findHubByTheme(themeId: string) {
+  const { data, error } = await supabase
+    .from("hubs")
+    .select("*")
+    .eq("theme_id", themeId)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (error) throw error;
+  return data;
+}
+
 // Spokes
 export async function getSpokes(themeId: string) {
   const { data, error } = await supabase.from("spokes").select("*").eq("theme_id", themeId).order("created_at");

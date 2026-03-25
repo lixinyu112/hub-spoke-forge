@@ -41,14 +41,14 @@ export default function ContentBrowser() {
   // Load saved prompt
   useEffect(() => {
     if (currentProject) {
-      loadPromptConfig(currentProject.id, "browser").then((saved) => {
+      loadPromptConfig(currentProject.id, "global").then((saved) => {
         if (saved) setPrompt(saved);
       });
     }
   }, [currentProject]);
 
   const handleSavePrompt = (val: string) => {
-    if (currentProject) savePromptConfig(currentProject.id, "browser", val);
+    if (currentProject) savePromptConfig(currentProject.id, "global", val);
   };
 
   const loadTree = useCallback(async () => {

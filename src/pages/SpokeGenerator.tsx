@@ -52,7 +52,7 @@ export default function SpokeGenerator() {
     if (currentProject) {
       getThemes(currentProject.id).then(setThemes).catch(console.error);
       getComponentSpecs(currentProject.id).then(setSpecs).catch(console.error);
-      loadPromptConfig(currentProject.id, "spoke").then((saved) => {
+      loadPromptConfig(currentProject.id, "global").then((saved) => {
         if (saved) setPrompt(saved);
       });
       // Load documents from DB
@@ -61,7 +61,7 @@ export default function SpokeGenerator() {
   }, [currentProject]);
 
   const handleSavePrompt = (val: string) => {
-    if (currentProject) savePromptConfig(currentProject.id, "spoke", val);
+    if (currentProject) savePromptConfig(currentProject.id, "global", val);
   };
 
   const handleLoadDocuments = async () => {

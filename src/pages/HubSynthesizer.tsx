@@ -39,13 +39,9 @@ export default function HubSynthesizer() {
     }
   }, [currentProject]);
 
-  useEffect(() => {
-    if (!currentProject || !prompt) return;
-    const timer = setTimeout(() => {
-      savePromptConfig(currentProject.id, "hub", prompt);
-    }, 1000);
-    return () => clearTimeout(timer);
-  }, [prompt, currentProject]);
+  const handleSavePrompt = (val: string) => {
+    if (currentProject) savePromptConfig(currentProject.id, "hub", val);
+  };
 
   useEffect(() => {
     if (selectedTheme) {

@@ -60,14 +60,9 @@ export default function SpokeGenerator() {
     }
   }, [currentProject]);
 
-  // Save prompt to DB when it changes (debounced)
-  useEffect(() => {
-    if (!currentProject || !prompt) return;
-    const timer = setTimeout(() => {
-      savePromptConfig(currentProject.id, "spoke", prompt);
-    }, 1000);
-    return () => clearTimeout(timer);
-  }, [prompt, currentProject]);
+  const handleSavePrompt = (val: string) => {
+    if (currentProject) savePromptConfig(currentProject.id, "spoke", val);
+  };
 
   const handleLoadDocuments = async () => {
     if (!currentProject) return;

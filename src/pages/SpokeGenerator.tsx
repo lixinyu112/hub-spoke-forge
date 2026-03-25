@@ -160,7 +160,13 @@ export default function SpokeGenerator() {
   };
 
   const toggleDoc = (token: string) => {
-    setSelectedDocs((prev) => prev.includes(token) ? prev.filter((t) => t !== token) : [...prev, token]);
+    setSelectedDocs((prev) => {
+      const next = prev.includes(token) ? prev.filter((t) => t !== token) : [...prev, token];
+      // Auto-switch to batch mode when multiple docs selected
+      if (next.length > 1) setMode("batch");
+      else if (next.length <= 1) setMode("single");
+      return next;
+    });
   };
 
   const handleCreateDoc = async (data: { token: string; name: string; content: string }) => {

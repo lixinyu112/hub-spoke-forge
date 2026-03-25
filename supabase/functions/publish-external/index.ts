@@ -18,7 +18,7 @@ const LANG_NAMES: Record<string, string> = {
  * Returns translated JSON object, or the original if translation fails or lang is zh.
  */
 async function translateJson(jsonData: any, targetLang: string, customSystemPrompt?: string): Promise<any> {
-  if (targetLang === "zh") return jsonData; // 源语言，无需翻译
+  // All languages go through translation to unify mixed-language content
 
   const llmApiKey = Deno.env.get("CUSTOM_LLM_API_KEY");
   if (!llmApiKey) {

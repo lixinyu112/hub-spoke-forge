@@ -18,7 +18,7 @@ import { PromptConfigButton } from "@/components/PromptConfigButton";
 import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from "@/components/ui/resizable";
 import { loadPromptConfig, savePromptConfig } from "@/lib/promptConfig";
 
-const THEME_NAME_REGEX = /^[a-z][a-z0-9\-]*$/;
+const THEME_NAME_REGEX = /^[a-z0-9][a-z0-9\-]*$/;
 
 export default function ContentBrowser() {
   const { currentProject } = useProject();
@@ -177,7 +177,7 @@ export default function ContentBrowser() {
   const validateThemeName = (name: string) => {
     if (!name) { setThemeNameError(""); return false; }
     if (!THEME_NAME_REGEX.test(name)) {
-      setThemeNameError("仅允许英文小写字母、数字与中划线（-），且以字母开头");
+      setThemeNameError("仅允许英文小写字母、数字与中划线（-），且以字母或数字开头");
       return false;
     }
     setThemeNameError("");

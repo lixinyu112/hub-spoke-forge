@@ -112,43 +112,104 @@ const HUB_SCHEMA_PROMPT = `你是一个 SEO 内容专家。请根据提供的 Sp
 每个组件格式: { "id": "唯一ID", "type": "组件类型", "props": { ... } }
 
 1. **hero** — 页面顶部横幅（Hub必需，放在首位）
-   props: { title, description, backgroundImage?, backgroundColor?, cta?: { text, url, variant: "primary"|"secondary" } }
+   props: {
+     "title": "页面主标题",
+     "subtitle": "副标题描述文案",
+     "backgroundImage": "背景图URL（可选）",
+     "cta": { "text": "按钮文字", "url": "链接URL", "variant": "primary"|"secondary" }
+   }
 
-2. **categoryCards** — 分类卡片（展示Spoke入口）
-   props: { title?, subtitle?, sub?: { label, items: string[] }, cards: [{ icon?, title, description, link, tag? }], layout?: "grid"|"list", columns?: 2|3|4 }
+2. **overview** — 概述（推荐放在hero之后）
+   props: {
+     "title": "概述标题",
+     "subtitle": "副标题",
+     "description": "详细描述文案",
+     "subItems": [
+       { "label": "分项标题", "description": "分项描述", "icon": "图标URL（可选）" }
+     ]
+   }
 
-3. **tutorialList** — 教程列表
-   props: { title, subtitle?, sub?: { label, items: string[] }, layout?: "grid"|"list", tutorials: [{ icon?, title, description, duration?, difficulty?, link, tag? }] }
+3. **tocNav** — 页面导航（推荐放在overview之后）
+   props: {
+     "title": "导航标题",
+     "items": [
+       { "name": "分类名称", "url": "/hub-slug#组件id", "description": "分类描述" }
+     ]
+   }
 
-4. **videoSection** — 视频列表
-   props: { title, subtitle?, videos: [{ thumbnail, title, duration, youtubeId?, link }], layout?: "grid"|"carousel" }
+4. **categoryCards** — 分类卡片（展示Spoke入口，可多次使用）
+   props: {
+     "title": "分类标题",
+     "subtitle": "分类副标题",
+     "sub": {
+       "label": "学习目标标签",
+       "items": ["学习目标1", "学习目标2"]
+     },
+     "layout": "grid"|"list",
+     "columns": 2|3|4,
+     "cards": [
+       {
+         "title": "卡片标题",
+         "description": "卡片描述",
+         "link": "/spoke-url-path",
+         "tag": "标签（可选）",
+         "icon": "图标URL（可选）"
+       }
+     ]
+   }
 
-5. **tipBox** — 提示框
-   props: { variant: "info"|"success"|"warning"|"error", icon?: "lightbulb"|"check"|"alert"|"error", title?, content: "纯文本" }
+5. **videoSection** — 视频列表
+   props: {
+     "title": "视频区标题",
+     "subtitle": "视频区副标题（可选）",
+     "layout": "grid"|"carousel",
+     "videos": [
+       {
+         "thumbnail": "视频缩略图URL",
+         "title": "视频标题",
+         "duration": "时长",
+         "youtubeId": "YouTube视频ID（可选）",
+         "link": "视频链接URL"
+       }
+     ]
+   }
 
 6. **faq** — 常见问题
-   props: { title, items: [{ question, answer }], defaultExpanded?: boolean }
+   props: {
+     "title": "FAQ标题",
+     "defaultExpanded": false,
+     "items": [
+       { "question": "问题", "answer": "详细回答" }
+     ]
+   }
 
-7. **ctaBanner** — 行动号召横幅
-   props: { title, subtitle?, primaryCta: { text, url }, secondaryCta?: { text, url }, backgroundImage?, backgroundColor?, variant?: "default"|"gradient"|"dark" }
+7. **ctaBanner** — 行动号召横幅（放在末尾）
+   props: {
+     "title": "号召文案",
+     "backgroundImage": "背景图URL（可选）",
+     "primaryCta": { "text": "按钮文字", "url": "链接URL" }
+   }
 
-8. **overview** — 概述
-   props: { title, subtitle?, description, subItems: [{ label, description, icon? }] }
+8. **tipBox** — 提示框（可选）
+   props: { "variant": "info"|"success"|"warning"|"error", "icon": "lightbulb"|"check"|"alert"|"error", "title": "标题（可选）", "content": "纯文本" }
 
-9. **tocNav** — 页面导航
-   props: { title, items: [{ name, url, description? }] }
+9. **tutorialList** — 教程列表（可选）
+   props: { "title": "标题", "subtitle": "副标题（可选）", "sub": { "label": "标签", "items": ["目标1"] }, "layout": "grid"|"list", "tutorials": [{ "icon": "图标URL（可选）", "title": "教程标题", "description": "描述", "duration": "时长（可选）", "difficulty": "难度（可选）", "link": "链接", "tag": "标签（可选）" }] }
 
-10. **downloadSection** — 下载区
-    props: { name, description?, hubLabel?, columns?: 2|3|4, plugins: [{ tags?: string[], imageUrl, title?, description?, level, downloadText?, downloadUrl }] }
+10. **downloadSection** — 下载区（可选）
+    props: { "name": "名称", "description": "描述（可选）", "hubLabel": "标签（可选）", "columns": 2|3|4, "plugins": [{ "tags": ["标签"], "imageUrl": "图片URL", "title": "标题", "description": "描述", "level": "级别", "downloadText": "下载文字", "downloadUrl": "下载URL" }] }
 
 ## 生成要求
 1. 内容基于提供的 Spoke 数据综合归纳
-2. 第一个组件必须是 hero
-3. 使用 categoryCards 展示各 Spoke 页面入口
-4. 可选添加 tutorialList、videoSection、overview、tocNav 丰富页面
-5. 末尾添加 faq 和 ctaBanner
-6. relatedHubs 列出相关主题Hub
-7. 只输出合法JSON，不要附加说明文字`;
+2. 第一个组件必须是 hero，包含 title、subtitle、backgroundImage 和 cta
+3. hero 之后推荐添加 overview 概述全局，再添加 tocNav 提供页面内锚点导航
+4. 使用多个 categoryCards 按主题分类展示各 Spoke 页面入口，每个 categoryCards 包含 sub 字段说明学习目标
+5. categoryCards 的 cards 中每个卡片的 link 指向对应 Spoke 页面路径
+6. 可选添加 videoSection 展示视频教程
+7. 末尾依次添加 faq（包含 10+ 条高质量问答）和 ctaBanner
+8. relatedHubs 列出 2-3 个相关主题Hub
+9. tocNav 的 items 中 url 使用 "/hub-slug#组件id" 格式指向页面内锚点
+10. 只输出合法JSON，不要附加说明文字`;
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {

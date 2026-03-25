@@ -12,7 +12,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { CodeViewer } from "@/components/CodeViewer";
 import { ValidationBar } from "@/components/ValidationBar";
 import { useProject } from "@/contexts/ProjectContext";
-import { getThemes, getComponentSpecs, createSpoke } from "@/lib/api";
+import { getThemes, getComponentSpecs, createSpoke, getDocuments, createDocument, updateDocument } from "@/lib/api";
 import { fetchFeishuDocs, fetchFeishuDocContent } from "@/lib/feishu";
 import { generateJson, saveJsonRecord } from "@/lib/generate";
 import { loadPromptConfig, savePromptConfig } from "@/lib/promptConfig";
@@ -52,10 +52,11 @@ export default function SpokeGenerator() {
     if (currentProject) {
       getThemes(currentProject.id).then(setThemes).catch(console.error);
       getComponentSpecs(currentProject.id).then(setSpecs).catch(console.error);
-      // Load saved prompt from DB
       loadPromptConfig(currentProject.id, "spoke").then((saved) => {
         if (saved) setPrompt(saved);
       });
+      // Load documents from DB
+      handleLoadDocuments();
     }
   }, [currentProject]);
 
@@ -68,22 +69,38 @@ export default function SpokeGenerator() {
     return () => clearTimeout(timer);
   }, [prompt, currentProject]);
 
-  useEffect(() => {
-    handleLoadFeishuDocs();
-  }, []);
-
-  const handleLoadFeishuDocs = async () => {
+  const handleLoadDocuments = async () => {
+    if (!currentProject) return;
     setLoadingDocs(true);
     try {
-      const res = await fetchFeishuDocs(feishuSearch || undefined);
-      if (res?.data?.files) {
-        setFeishuDocs(res.data.files.map((f: any) => ({ token: f.token, name: f.name, type: f.type, url: f.url })));
-      } else if (res?.data?.docs_entities) {
-        setFeishuDocs(res.data.docs_entities.map((d: any) => ({ token: d.docs_token, name: d.title, type: d.docs_type, url: d.url })));
+      // Load DB-persisted documents
+      const dbDocs = await getDocuments(currentProject.id);
+      const mapped: FeishuDoc[] = dbDocs.map((d: any) => ({
+        token: d.token,
+        name: d.name,
+        type: d.type,
+        manualContent: d.content || undefined,
+      }));
+      // Also load feishu API docs and merge (avoid duplicates)
+      try {
+        const res = await fetchFeishuDocs(feishuSearch || undefined);
+        let apiDocs: FeishuDoc[] = [];
+        if (res?.data?.files) {
+          apiDocs = res.data.files.map((f: any) => ({ token: f.token, name: f.name, type: f.type, url: f.url }));
+        } else if (res?.data?.docs_entities) {
+          apiDocs = res.data.docs_entities.map((d: any) => ({ token: d.docs_token, name: d.title, type: d.docs_type, url: d.url }));
+        }
+        const existingTokens = new Set(mapped.map((d) => d.token));
+        for (const ad of apiDocs) {
+          if (!existingTokens.has(ad.token)) mapped.push(ad);
+        }
+      } catch (e) {
+        console.warn("飞书 API 文档加载失败:", e);
       }
+      setFeishuDocs(mapped);
     } catch (e) {
-      console.error("Failed to load feishu docs:", e);
-      toast({ title: "飞书文档加载失败", description: "请检查飞书应用权限配置。", variant: "destructive" });
+      console.error("Failed to load documents:", e);
+      toast({ title: "文档加载失败", variant: "destructive" });
     } finally {
       setLoadingDocs(false);
     }
@@ -93,31 +110,47 @@ export default function SpokeGenerator() {
     setSelectedDocs((prev) => prev.includes(token) ? prev.filter((t) => t !== token) : [...prev, token]);
   };
 
-  const handleCreateDoc = (data: { token: string; name: string; content: string }) => {
+  const handleCreateDoc = async (data: { token: string; name: string; content: string }) => {
     if (!data.name || !data.token) {
       toast({ title: "请填写文档名称和文档 ID", variant: "destructive" });
       return;
     }
-    setFeishuDocs((prev) => {
-      if (prev.some((d) => d.token === data.token)) {
-        toast({ title: "文档 ID 已存在", variant: "destructive" });
-        return prev;
-      }
-      return [{ token: data.token, name: data.name, type: "manual", manualContent: data.content || undefined }, ...prev];
-    });
-    setSelectedDocs((prev) => [...prev, data.token]);
-    toast({ title: "文档已创建并选中" });
+    if (!currentProject) return;
+    if (feishuDocs.some((d) => d.token === data.token)) {
+      toast({ title: "文档 ID 已存在", variant: "destructive" });
+      return;
+    }
+    try {
+      await createDocument({
+        project_id: currentProject.id,
+        token: data.token,
+        name: data.name,
+        type: "manual",
+        content: data.content || undefined,
+      });
+      setFeishuDocs((prev) => [{ token: data.token, name: data.name, type: "manual", manualContent: data.content || undefined }, ...prev]);
+      setSelectedDocs((prev) => [...prev, data.token]);
+      toast({ title: "文档已创建并选中" });
+    } catch (e: any) {
+      toast({ title: "创建文档失败", description: e.message, variant: "destructive" });
+    }
   };
 
-  const handleEditDoc = (data: { token: string; name: string; content: string }) => {
-    setFeishuDocs((prev) =>
-      prev.map((d) =>
-        d.token === data.token
-          ? { ...d, name: data.name, manualContent: data.content || undefined }
-          : d
-      )
-    );
-    toast({ title: "文档已更新" });
+  const handleEditDoc = async (data: { token: string; name: string; content: string }) => {
+    if (!currentProject) return;
+    try {
+      await updateDocument(currentProject.id, data.token, { name: data.name, content: data.content || undefined });
+      setFeishuDocs((prev) =>
+        prev.map((d) =>
+          d.token === data.token
+            ? { ...d, name: data.name, manualContent: data.content || undefined }
+            : d
+        )
+      );
+      toast({ title: "文档已更新" });
+    } catch (e: any) {
+      toast({ title: "更新文档失败", description: e.message, variant: "destructive" });
+    }
   };
 
   const handleGenerateSingle = async () => {
@@ -338,7 +371,7 @@ export default function SpokeGenerator() {
                     className="pl-8 h-9 text-xs"
                   />
                 </div>
-                <Button variant="outline" size="sm" onClick={handleLoadFeishuDocs} disabled={loadingDocs} className="h-9 text-xs">
+                <Button variant="outline" size="sm" onClick={handleLoadDocuments} disabled={loadingDocs} className="h-9 text-xs">
                   {loadingDocs ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : "刷新"}
                 </Button>
               </div>

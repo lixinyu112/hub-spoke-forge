@@ -9,7 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Layers } from "lucide-react";
 import { useProject } from "@/contexts/ProjectContext";
-import { getProjectTree, createTheme, createPublicationsBatch } from "@/lib/api";
+import { getProjectTree, createTheme, updateTheme, createPublicationsBatch } from "@/lib/api";
 import { toast } from "@/hooks/use-toast";
 import { ContentTree, type TreeTheme } from "@/components/ContentTree";
 import { PublishDialog } from "@/components/PublishDialog";

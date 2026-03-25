@@ -323,14 +323,15 @@ export default function ContentBrowser() {
           <div className="space-y-3">
             <div>
               <Input
-                placeholder="主题名称（仅英文小写字母与中划线）"
+                placeholder="主题名称（英文小写字母、数字与中划线）"
                 value={newThemeName}
                 onChange={(e) => handleThemeNameChange(e.target.value)}
                 className={themeNameError ? "border-destructive" : ""}
               />
               {themeNameError && <p className="text-xs text-destructive mt-1">{themeNameError}</p>}
-              <p className="text-xs text-muted-foreground mt-1">例如：digital-marketing、seo-guide</p>
+              <p className="text-xs text-muted-foreground mt-1">例如：digital-marketing、seo-guide2</p>
             </div>
+            <Input placeholder="飞书文档 ID（可选）" value={newThemeFeishuToken} onChange={(e) => setNewThemeFeishuToken(e.target.value)} />
             <Input placeholder="描述（可选）" value={newThemeDesc} onChange={(e) => setNewThemeDesc(e.target.value)} />
           </div>
           <DialogFooter>

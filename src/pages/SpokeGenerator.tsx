@@ -67,6 +67,10 @@ export default function SpokeGenerator() {
     }
   }, [currentProject]);
 
+  useEffect(() => {
+    handleLoadFeishuDocs();
+  }, []);
+
   const handleLoadFeishuDocs = async () => {
     setLoadingDocs(true);
     try {
@@ -121,23 +125,29 @@ export default function SpokeGenerator() {
       toast({ title: "请选择主题", variant: "destructive" });
       return;
     }
-    const doc = feishuDocs.find((d) => d.token === selectedDocs[0]);
+    if(selectedDocs.length === 0) {
+      toast({ title: "请选择至少一个飞书文档", variant: "destructive" });
+      return;
+    }
     setLoading(true);
     setOutput("");
     setValidation("idle");
+    const contents:string [] = [];
+   for(let i = 0; i < selectedDocs.length; i++) {
+    const doc = feishuDocs.find((d) => d.token === selectedDocs[i]);
+    try {
+      const docRes = await fetchFeishuDocContent(doc.token, doc.type);
+      contents.push(docRes?.data?.content || JSON.stringify(docRes?.data) || doc.name);
+    } catch (e) {
+      console.warn("飞书文档内容获取失败，使用文档标题:", e);
+    } finally {
+      setLoading(false);
+    }
+    }
 
     try {
       // 第一步：获取飞书文档内容
       let feishuContent = scrapedData || "";
-      if (doc) {
-        try {
-          const docRes = await fetchFeishuDocContent(doc.token, doc.type);
-          feishuContent = docRes?.data?.content || JSON.stringify(docRes?.data) || doc.name;
-        } catch (e) {
-          console.warn("飞书文档内容获取失败，使用文档标题:", e);
-          feishuContent = doc.name;
-        }
-      }
       if (!feishuContent && keyword) feishuContent = keyword;
 
       // 第二步：调用 AI 生成 Spoke JSON

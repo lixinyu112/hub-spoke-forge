@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { Plus, Send, Filter } from "lucide-react";
+import { Plus, Send, Filter, Pencil } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -37,6 +37,11 @@ export default function ContentBrowser() {
   const [newThemeFeishuToken, setNewThemeFeishuToken] = useState("");
   const [themeNameError, setThemeNameError] = useState("");
   const [prompt, setPrompt] = useState("");
+  const [editThemeDialogOpen, setEditThemeDialogOpen] = useState(false);
+  const [editThemeName, setEditThemeName] = useState("");
+  const [editThemeDesc, setEditThemeDesc] = useState("");
+  const [editThemeFeishuToken, setEditThemeFeishuToken] = useState("");
+  const [editThemeNameError, setEditThemeNameError] = useState("");
 
   // Load saved prompt
   useEffect(() => {

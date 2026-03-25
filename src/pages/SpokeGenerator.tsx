@@ -68,6 +68,10 @@ export default function SpokeGenerator() {
     }
   }, [currentProject]);
 
+  useEffect(() => {
+    handleLoadDocuments()
+  }, [selectedTheme])
+
   const handleSavePrompt = (val: string) => {
     if (currentProject) savePromptConfig(currentProject.id, "spoke", val);
   };
@@ -86,8 +90,9 @@ export default function SpokeGenerator() {
       }));
       // Also load feishu API docs and merge (avoid duplicates)
       try {
-        const res = await fetchFeishuDocs(feishuSearch || undefined);
+        const res = await fetchFeishuDocs(feishuSearch || undefined, selectedTheme);
         let apiDocs: FeishuDoc[] = [];
+        console.log('feiShuDocs=====', res)
         if (res?.data?.files) {
           apiDocs = res.data.files.map((f: any) => ({ token: f.token, name: f.name, type: f.type, url: f.url }));
         } else if (res?.data?.docs_entities) {

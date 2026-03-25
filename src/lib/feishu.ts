@@ -1,8 +1,8 @@
 import { supabase } from "@/integrations/supabase/client";
 
-export async function fetchFeishuDocs(query?: string) {
+export async function fetchFeishuDocs(query?: string, folderId?: string) {
   const action = query ? "search_docs" : "list_docs";
-  const params = new URLSearchParams({ action });
+  const params = new URLSearchParams({ action, folderToken: folderId });
   if (query) params.set("query", query);
 
   const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;

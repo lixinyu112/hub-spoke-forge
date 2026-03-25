@@ -107,7 +107,7 @@ export default function SpokeGenerator() {
         const dbMap = new Map(dbDocs.map((d: any) => [d.token, d.content]));
         docs = docs.map((d) => ({
           ...d,
-          manualContent: dbMap.get(d.token) || undefined,
+          manualContent: (dbMap.get(d.token) as string) || undefined,
         }));
       } catch (e) {
         console.warn("DB 文档加载失败:", e);

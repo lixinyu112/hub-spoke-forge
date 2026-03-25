@@ -34,6 +34,7 @@ export default function ContentBrowser() {
   const [publishing, setPublishing] = useState(false);
   const [newThemeName, setNewThemeName] = useState("");
   const [newThemeDesc, setNewThemeDesc] = useState("");
+  const [newThemeFeishuToken, setNewThemeFeishuToken] = useState("");
   const [themeNameError, setThemeNameError] = useState("");
   const [prompt, setPrompt] = useState("");
 

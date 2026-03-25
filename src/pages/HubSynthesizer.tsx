@@ -39,13 +39,9 @@ export default function HubSynthesizer() {
     }
   }, [currentProject]);
 
-  useEffect(() => {
-    if (!currentProject || !prompt) return;
-    const timer = setTimeout(() => {
-      savePromptConfig(currentProject.id, "hub", prompt);
-    }, 1000);
-    return () => clearTimeout(timer);
-  }, [prompt, currentProject]);
+  const handleSavePrompt = (val: string) => {
+    if (currentProject) savePromptConfig(currentProject.id, "hub", val);
+  };
 
   useEffect(() => {
     if (selectedTheme) {
@@ -129,7 +125,7 @@ export default function HubSynthesizer() {
       <div>
         <div className="flex items-center gap-1.5">
           <h1 className="text-2xl font-semibold tracking-tight">Hub 合成器</h1>
-          <PromptConfigButton value={prompt} onChange={setPrompt} placeholder="输入 Hub 合成的 system prompt…" />
+          <PromptConfigButton value={prompt} onChange={setPrompt} onConfirm={handleSavePrompt} placeholder="输入 Hub 合成的 system prompt…" />
         </div>
         <p className="text-sm text-muted-foreground mt-1">将 Spoke 页面聚合为结构化的 Hub JSON</p>
       </div>

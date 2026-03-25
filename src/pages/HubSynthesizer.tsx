@@ -9,7 +9,7 @@ import { CodeViewer } from "@/components/CodeViewer";
 import { ValidationBar } from "@/components/ValidationBar";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useProject } from "@/contexts/ProjectContext";
-import { getThemes, getSpokes, getComponentSpecs, createHub } from "@/lib/api";
+import { getThemes, getSpokes, getComponentSpecs, createHub, updateHub, findHubByTheme } from "@/lib/api";
 import { generateJson, saveJsonRecord } from "@/lib/generate";
 import { toast } from "@/hooks/use-toast";
 import type { Theme, Spoke, ComponentSpec } from "@/lib/api";

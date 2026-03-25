@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Sparkles, FileText, Search, Loader2, Pencil } from "lucide-react";
+import { Sparkles, FileText, Search, Loader2, Pencil, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";

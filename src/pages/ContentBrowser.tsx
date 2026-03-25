@@ -193,8 +193,8 @@ export default function ContentBrowser() {
     if (!currentProject || !newThemeName.trim()) return;
     if (!validateThemeName(newThemeName.trim())) return;
     try {
-      const created = await createTheme(currentProject.id, newThemeName.trim(), newThemeDesc.trim() || undefined);
-      setNewThemeName(""); setNewThemeDesc(""); setThemeNameError("");
+      const created = await createTheme(currentProject.id, newThemeName.trim(), newThemeDesc.trim() || undefined, newThemeFeishuToken.trim() || undefined);
+      setNewThemeName(""); setNewThemeDesc(""); setNewThemeFeishuToken(""); setThemeNameError("");
       setThemeDialogOpen(false);
       toast({ title: "主题已创建" });
       await loadTree();

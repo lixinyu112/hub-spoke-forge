@@ -47,6 +47,14 @@ export default function SpokeGenerator() {
   const [selectedDocs, setSelectedDocs] = useState<string[]>([]);
   const [loadingDocs, setLoadingDocs] = useState(false);
   const [batchProgress, setBatchProgress] = useState<{ total: number; done: number; results: { title: string; success: boolean }[] } | null>(null);
+  const [pendingSave, setPendingSave] = useState<{
+    generatedJson: any;
+    feishuContent: string;
+    promptUsed: string;
+    title: string;
+    firstDoc: FeishuDoc | undefined;
+  } | null>(null);
+  const [confirmed, setConfirmed] = useState(false);
 
   useEffect(() => {
     if (currentProject) {
@@ -202,22 +210,15 @@ export default function SpokeGenerator() {
       setValidation(generatedJson && typeof generatedJson === "object" ? "passed" : "failed");
 
       const title = generatedJson?.title || firstDoc?.name || "未命名 Spoke";
-      await saveJsonRecord({
-        type: "spoke",
-        feishu_content: feishuContent,
-        prompt_content: result.prompt_used || prompt,
-        generated_json: generatedJson,
-      });
-
-      await createSpoke({
-        theme_id: selectedTheme,
+      setPendingSave({
+        generatedJson,
+        feishuContent,
+        promptUsed: result.prompt_used || prompt,
         title,
-        json_data: generatedJson,
-        feishu_doc_token: firstDoc?.token || null,
-        feishu_doc_title: firstDoc?.name || null,
-        status: "generated",
+        firstDoc,
       });
-      toast({ title: "Spoke 已生成并保存" });
+      setConfirmed(false);
+      toast({ title: "Spoke JSON 已生成，请检查后确认保存" });
     } catch (e: any) {
       console.error(e);
       setValidation("failed");
@@ -228,8 +229,42 @@ export default function SpokeGenerator() {
     }
   };
 
+  const handleConfirmSave = async (editedCode: string) => {
+    if (!pendingSave) return;
+    try {
+      const editedJson = JSON.parse(editedCode);
+      await saveJsonRecord({
+        type: "spoke",
+        feishu_content: pendingSave.feishuContent,
+        prompt_content: pendingSave.promptUsed,
+        generated_json: editedJson,
+      });
+      await createSpoke({
+        theme_id: selectedTheme,
+        title: editedJson?.title || pendingSave.title,
+        json_data: editedJson,
+        feishu_doc_token: pendingSave.firstDoc?.token || null,
+        feishu_doc_title: pendingSave.firstDoc?.name || null,
+        status: "generated",
+      });
+      setOutput(editedCode);
+      setConfirmed(true);
+      setPendingSave(null);
+      toast({ title: "Spoke 已确认保存" });
+    } catch (e: any) {
+      toast({ title: "保存失败", description: e.message, variant: "destructive" });
+    }
+  };
+
+  const handleDiscardSave = () => {
+    setOutput("");
+    setPendingSave(null);
+    setConfirmed(false);
+    setValidation("idle");
+    toast({ title: "已放弃生成结果" });
+  };
+
   const handleGenerateBatch = async () => {
-    if (!selectedTheme) {
       toast({ title: "请选择主题", variant: "destructive" });
       return;
     }
@@ -494,7 +529,7 @@ export default function SpokeGenerator() {
                   </TabsList>
                 </div>
                 <TabsContent value="json" className="flex-1 m-0">
-                  <CodeViewer code={output} loading={loading} filename="spoke-output.json" />
+                  <CodeViewer code={output} loading={loading} filename="spoke-output.json" editable={!!pendingSave} onConfirm={handleConfirmSave} onDiscard={handleDiscardSave} confirmed={confirmed} />
                 </TabsContent>
               </Tabs>
             )}

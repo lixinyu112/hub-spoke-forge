@@ -28,6 +28,12 @@ export default function HubSynthesizer() {
   const [selectedSpokes, setSelectedSpokes] = useState<string[]>([]);
   const [context, setContext] = useState("");
   const [prompt, setPrompt] = useState("");
+  const [pendingSave, setPendingSave] = useState<{
+    generatedJson: any;
+    spokeContent: string;
+    promptUsed: string;
+  } | null>(null);
+  const [confirmed, setConfirmed] = useState(false);
 
   useEffect(() => {
     if (currentProject) {
@@ -90,23 +96,13 @@ export default function HubSynthesizer() {
       setOutput(json);
       setValidation(generatedJson && typeof generatedJson === "object" ? "passed" : "failed");
 
-      // 保存到 json_records 表
-      await saveJsonRecord({
-        type: "hub",
-        feishu_content: spokeContent,
-        prompt_content: result.prompt_used || prompt,
-        generated_json: generatedJson,
+      setPendingSave({
+        generatedJson,
+        spokeContent,
+        promptUsed: result.prompt_used || prompt,
       });
-
-      // 保存到 hubs 表
-      await createHub({
-        theme_id: selectedTheme,
-        title: generatedJson?.title || themes.find((t) => t.id === selectedTheme)?.name + " — Hub",
-        slug: generatedJson?.slug || null,
-        json_data: generatedJson,
-        status: "generated",
-      });
-      toast({ title: "Hub 已生成并保存" });
+      setConfirmed(false);
+      toast({ title: "Hub JSON 已生成，请检查后确认保存" });
     } catch (e: any) {
       console.error(e);
       setValidation("failed");
@@ -117,7 +113,41 @@ export default function HubSynthesizer() {
     }
   };
 
-  const parsedOutput = output ? (() => { try { return JSON.parse(output); } catch { return null; } })() : null;
+  const handleConfirmSave = async (editedCode: string) => {
+    if (!pendingSave) return;
+    try {
+      const editedJson = JSON.parse(editedCode);
+      await saveJsonRecord({
+        type: "hub",
+        feishu_content: pendingSave.spokeContent,
+        prompt_content: pendingSave.promptUsed,
+        generated_json: editedJson,
+      });
+      await createHub({
+        theme_id: selectedTheme,
+        title: editedJson?.title || themes.find((t) => t.id === selectedTheme)?.name + " — Hub",
+        slug: editedJson?.slug || null,
+        json_data: editedJson,
+        status: "generated",
+      });
+      setOutput(editedCode);
+      setConfirmed(true);
+      setPendingSave(null);
+      toast({ title: "Hub 已确认保存" });
+    } catch (e: any) {
+      toast({ title: "保存失败", description: e.message, variant: "destructive" });
+    }
+  };
+
+  const handleDiscardSave = () => {
+    setOutput("");
+    setPendingSave(null);
+    setConfirmed(false);
+    setValidation("idle");
+    toast({ title: "已放弃生成结果" });
+  };
+
+
   const hubSpecs = specs.filter((s) => s.type === "hub");
 
   return (
@@ -227,7 +257,7 @@ export default function HubSynthesizer() {
                 </TabsList>
               </div>
               <TabsContent value="json" className="flex-1 m-0">
-                <CodeViewer code={output} loading={loading} filename="hub-output.json" />
+                <CodeViewer code={output} loading={loading} filename="hub-output.json" editable={!!pendingSave} onConfirm={handleConfirmSave} onDiscard={handleDiscardSave} confirmed={confirmed} />
               </TabsContent>
               <TabsContent value="tree" className="flex-1 m-0 p-4 overflow-auto">
                 {parsedOutput ? (

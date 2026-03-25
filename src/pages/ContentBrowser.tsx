@@ -102,6 +102,33 @@ export default function ContentBrowser() {
     setSelectedItems((prev) => { const n = new Set(prev); n.has(key) ? n.delete(key) : n.add(key); return n; });
   };
 
+  // Compute all selectable keys from filtered tree
+  const allSelectableKeys = useMemo(() => {
+    const keys = new Set<string>();
+    for (const theme of filteredTree) {
+      for (const hub of theme.hubs) {
+        keys.add(`hub:${hub.id}`);
+        for (const spoke of hub.spokes) {
+          keys.add(`spoke:${spoke.id}`);
+        }
+      }
+      for (const spoke of theme.unlinkedSpokes) {
+        keys.add(`spoke:${spoke.id}`);
+      }
+    }
+    return keys;
+  }, [filteredTree]);
+
+  const isAllSelected = allSelectableKeys.size > 0 && [...allSelectableKeys].every((k) => selectedItems.has(k));
+
+  const handleSelectAll = () => {
+    if (isAllSelected) {
+      setSelectedItems(new Set());
+    } else {
+      setSelectedItems(new Set(allSelectableKeys));
+    }
+  };
+
   const getSelectedData = () => {
     const items: { type: "hub" | "spoke"; id: string; title: string; json_data: any }[] = [];
     for (const key of selectedItems) {
@@ -255,6 +282,9 @@ export default function ContentBrowser() {
           <p className="text-sm text-muted-foreground mt-1">按 主题 → Hub → Spoke 层级查看并发布内容</p>
         </div>
         <div className="flex items-center gap-2">
+      <Button size="sm" variant="outline" onClick={handleSelectAll} className="gap-1.5">
+            {isAllSelected ? "取消全选" : "全选"}
+          </Button>
           {selectedItems.size > 0 && (
             <Button size="sm" onClick={() => setPublishDialogOpen(true)} className="gap-1.5">
               <Send className="h-3.5 w-3.5" />

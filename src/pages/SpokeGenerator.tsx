@@ -27,6 +27,8 @@ interface FeishuDoc {
   type: string;
   url?: string;
   manualContent?: string;
+  modifiedTime?: string; // 飞书文档最后修改时间
+  lastGeneratedAt?: string; // JSON 最后生成时间
 }
 
 export default function SpokeGenerator() {
@@ -96,21 +98,36 @@ export default function SpokeGenerator() {
       const res = await fetchFeishuDocs(feishuSearch || undefined, folderToken);
       let docs: FeishuDoc[] = [];
       if (res?.data?.files) {
-        docs = res.data.files.map((f: any) => ({ token: f.token, name: f.name, type: f.type, url: f.url }));
+        docs = res.data.files.map((f: any) => ({
+          token: f.token, name: f.name, type: f.type, url: f.url,
+          modifiedTime: f.modified_time ? new Date(Number(f.modified_time) * 1000).toISOString() : undefined,
+        }));
       } else if (res?.data?.docs_entities) {
-        docs = res.data.docs_entities.map((d: any) => ({ token: d.docs_token, name: d.title, type: d.docs_type, url: d.url }));
+        docs = res.data.docs_entities.map((d: any) => ({
+          token: d.docs_token, name: d.title, type: d.docs_type, url: d.url,
+          modifiedTime: d.edit_time ? new Date(Number(d.edit_time) * 1000).toISOString() : undefined,
+        }));
       }
 
-      // 用 DB 中已持久化的内容补充 manualContent（仅匹配当前文件夹下的文档）
+      // 查询 spokes 表获取每个文档的 JSON 最后生成时间，同时补充 DB 中的 manualContent
       try {
-        const dbDocs = await getDocuments(currentProject.id);
+        const [dbDocs, spokesRes] = await Promise.all([
+          getDocuments(currentProject.id),
+          import("@/integrations/supabase/client").then(m =>
+            m.supabase.from("spokes").select("feishu_doc_token, updated_at").eq("theme_id", selectedTheme)
+          ),
+        ]);
         const dbMap = new Map(dbDocs.map((d: any) => [d.token, d.content]));
+        const spokeMap = new Map(
+          (spokesRes.data || []).map((s: any) => [s.feishu_doc_token, s.updated_at])
+        );
         docs = docs.map((d) => ({
           ...d,
           manualContent: (dbMap.get(d.token) as string) || undefined,
+          lastGeneratedAt: (spokeMap.get(d.token) as string) || undefined,
         }));
       } catch (e) {
-        console.warn("DB 文档加载失败:", e);
+        console.warn("DB 文档/Spoke 加载失败:", e);
       }
 
       setFeishuDocs(docs);
@@ -539,7 +556,17 @@ export default function SpokeGenerator() {
                     />
                     <div className="flex-1 min-w-0">
                       <p className="text-sm truncate">{doc.name}</p>
-                      <p className="text-[10px] text-muted-foreground font-mono">{doc.token}</p>
+                      <div className="flex items-center gap-2 text-[10px] text-muted-foreground">
+                        {doc.modifiedTime && (
+                          <span title="飞书最后修改">📝 {new Date(doc.modifiedTime).toLocaleDateString("zh-CN", { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" })}</span>
+                        )}
+                        {doc.lastGeneratedAt && (
+                          <span title="JSON 最后生成" className="text-primary/70">⚡ {new Date(doc.lastGeneratedAt).toLocaleDateString("zh-CN", { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" })}</span>
+                        )}
+                        {!doc.modifiedTime && !doc.lastGeneratedAt && (
+                          <span className="font-mono">{doc.token}</span>
+                        )}
+                      </div>
                     </div>
                     <DocFormDialog
                       mode="edit"

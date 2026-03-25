@@ -35,6 +35,7 @@ export default function ContentBrowser() {
   const [publishDialogOpen, setPublishDialogOpen] = useState(false);
   const [publishing, setPublishing] = useState(false);
   const [publishReport, setPublishReport] = useState<PublishReport | null>(null);
+  const [publishProgress, setPublishProgress] = useState<{ total: number; done: number } | null>(null);
   const [newThemeName, setNewThemeName] = useState("");
   const [newThemeDesc, setNewThemeDesc] = useState("");
   const [newThemeFeishuToken, setNewThemeFeishuToken] = useState("");
@@ -153,6 +154,7 @@ export default function ContentBrowser() {
     if (!currentProject) return;
     setPublishing(true);
     setPublishReport(null);
+    setPublishProgress({ total: 0, done: 0 });
 
     try {
       const items = getSelectedData();
@@ -179,6 +181,10 @@ export default function ContentBrowser() {
       const MAX_RETRIES = 2;
       type PublishResult = { item_id: string; item_title: string; language: string; success: boolean; error?: string };
       const allResults: PublishResult[] = [];
+
+      const totalTasks = items.length * languages.length;
+      setPublishProgress({ total: totalTasks, done: 0 });
+      let completedTasks = 0;
 
       for (let i = 0; i < items.length; i += BATCH_SIZE) {
         const batch = items.slice(i, i + BATCH_SIZE);
@@ -207,6 +213,8 @@ export default function ContentBrowser() {
           } catch (err: any) {
             batch.forEach((item) => allResults.push({ item_id: item.id, item_title: item.title, language: lang, success: false, error: String(err) }));
           }
+          completedTasks += batch.length;
+          setPublishProgress({ total: totalTasks, done: Math.min(completedTasks, totalTasks) });
         }
       }
 
@@ -274,6 +282,7 @@ export default function ContentBrowser() {
       toast({ title: "发布失败", variant: "destructive" });
     }
     setPublishing(false);
+    setPublishProgress(null);
   };
 
   const validateThemeName = (name: string) => {
@@ -525,6 +534,7 @@ export default function ContentBrowser() {
         publishing={publishing}
         onPublish={handlePublish}
         report={publishReport}
+        progress={publishProgress}
       />
     </div>
   );

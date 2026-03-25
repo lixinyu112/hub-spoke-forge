@@ -96,23 +96,13 @@ export default function HubSynthesizer() {
       setOutput(json);
       setValidation(generatedJson && typeof generatedJson === "object" ? "passed" : "failed");
 
-      // 保存到 json_records 表
-      await saveJsonRecord({
-        type: "hub",
-        feishu_content: spokeContent,
-        prompt_content: result.prompt_used || prompt,
-        generated_json: generatedJson,
+      setPendingSave({
+        generatedJson,
+        spokeContent,
+        promptUsed: result.prompt_used || prompt,
       });
-
-      // 保存到 hubs 表
-      await createHub({
-        theme_id: selectedTheme,
-        title: generatedJson?.title || themes.find((t) => t.id === selectedTheme)?.name + " — Hub",
-        slug: generatedJson?.slug || null,
-        json_data: generatedJson,
-        status: "generated",
-      });
-      toast({ title: "Hub 已生成并保存" });
+      setConfirmed(false);
+      toast({ title: "Hub JSON 已生成，请检查后确认保存" });
     } catch (e: any) {
       console.error(e);
       setValidation("failed");

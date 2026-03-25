@@ -210,22 +210,15 @@ export default function SpokeGenerator() {
       setValidation(generatedJson && typeof generatedJson === "object" ? "passed" : "failed");
 
       const title = generatedJson?.title || firstDoc?.name || "未命名 Spoke";
-      await saveJsonRecord({
-        type: "spoke",
-        feishu_content: feishuContent,
-        prompt_content: result.prompt_used || prompt,
-        generated_json: generatedJson,
-      });
-
-      await createSpoke({
-        theme_id: selectedTheme,
+      setPendingSave({
+        generatedJson,
+        feishuContent,
+        promptUsed: result.prompt_used || prompt,
         title,
-        json_data: generatedJson,
-        feishu_doc_token: firstDoc?.token || null,
-        feishu_doc_title: firstDoc?.name || null,
-        status: "generated",
+        firstDoc,
       });
-      toast({ title: "Spoke 已生成并保存" });
+      setConfirmed(false);
+      toast({ title: "Spoke JSON 已生成，请检查后确认保存" });
     } catch (e: any) {
       console.error(e);
       setValidation("failed");

@@ -90,7 +90,9 @@ export default function SpokeGenerator() {
       }));
       // Also load feishu API docs and merge (avoid duplicates)
       try {
-        const res = await fetchFeishuDocs(feishuSearch || undefined, selectedTheme);
+        const themeObj = themes.find((t) => t.id === selectedTheme);
+        const folderToken = themeObj?.feishu_doc_token || undefined;
+        const res = await fetchFeishuDocs(feishuSearch || undefined, folderToken);
         let apiDocs: FeishuDoc[] = [];
         console.log('feiShuDocs=====', res)
         if (res?.data?.files) {

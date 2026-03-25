@@ -40,7 +40,7 @@ export default function HubSynthesizer() {
   }, [currentProject]);
 
   const handleSavePrompt = (val: string) => {
-    if (currentProject) savePromptConfig(currentProject.id, "global", val);
+    if (currentProject) savePromptConfig(currentProject.id, "hub", val);
   };
 
   useEffect(() => {

@@ -61,7 +61,7 @@ export default function SpokeGenerator() {
   }, [currentProject]);
 
   const handleSavePrompt = (val: string) => {
-    if (currentProject) savePromptConfig(currentProject.id, "global", val);
+    if (currentProject) savePromptConfig(currentProject.id, "spoke", val);
   };
 
   const handleLoadDocuments = async () => {

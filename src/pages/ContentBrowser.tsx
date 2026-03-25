@@ -48,7 +48,7 @@ export default function ContentBrowser() {
   }, [currentProject]);
 
   const handleSavePrompt = (val: string) => {
-    if (currentProject) savePromptConfig(currentProject.id, "global", val);
+    if (currentProject) savePromptConfig(currentProject.id, "translate", val);
   };
 
   const loadTree = useCallback(async () => {

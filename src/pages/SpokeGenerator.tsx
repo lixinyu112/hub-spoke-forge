@@ -82,47 +82,45 @@ export default function SpokeGenerator() {
   const [syncing, setSyncing] = useState(false);
 
   const handleLoadDocuments = async () => {
-    if (!currentProject) return;
+    if (!currentProject || !selectedTheme) return;
+    const themeObj = themes.find((t) => t.id === selectedTheme);
+    const folderToken = themeObj?.feishu_doc_token;
+    if (!folderToken) {
+      setFeishuDocs([]);
+      toast({ title: "当前主题未关联飞书文件夹", variant: "destructive" });
+      return;
+    }
     setLoadingDocs(true);
     try {
-      // Load DB-persisted documents
-      const dbDocs = await getDocuments(currentProject.id);
-      const mapped: FeishuDoc[] = dbDocs.map((d: any) => ({
-        token: d.token,
-        name: d.name,
-        type: d.type,
-        manualContent: d.content || undefined,
-      }));
+      // 仅通过当前主题的 folder_token 查询飞书文件夹下的文档
+      const res = await fetchFeishuDocs(feishuSearch || undefined, folderToken);
+      let docs: FeishuDoc[] = [];
+      if (res?.data?.files) {
+        docs = res.data.files.map((f: any) => ({ token: f.token, name: f.name, type: f.type, url: f.url }));
+      } else if (res?.data?.docs_entities) {
+        docs = res.data.docs_entities.map((d: any) => ({ token: d.docs_token, name: d.title, type: d.docs_type, url: d.url }));
+      }
 
-      // Load feishu API docs based on selected theme's folder token
-      let apiDocs: FeishuDoc[] = [];
+      // 用 DB 中已持久化的内容补充 manualContent（仅匹配当前文件夹下的文档）
       try {
-        const themeObj = themes.find((t) => t.id === selectedTheme);
-        const folderToken = themeObj?.feishu_doc_token || undefined;
-        const res = await fetchFeishuDocs(feishuSearch || undefined, folderToken);
-        console.log('feiShuDocs=====', res);
-        if (res?.data?.files) {
-          apiDocs = res.data.files.map((f: any) => ({ token: f.token, name: f.name, type: f.type, url: f.url }));
-        } else if (res?.data?.docs_entities) {
-          apiDocs = res.data.docs_entities.map((d: any) => ({ token: d.docs_token, name: d.title, type: d.docs_type, url: d.url }));
-        }
+        const dbDocs = await getDocuments(currentProject.id);
+        const dbMap = new Map(dbDocs.map((d: any) => [d.token, d.content]));
+        docs = docs.map((d) => ({
+          ...d,
+          manualContent: dbMap.get(d.token) || undefined,
+        }));
       } catch (e) {
-        console.warn("飞书 API 文档加载失败:", e);
+        console.warn("DB 文档加载失败:", e);
       }
 
-      // Merge API docs into mapped list (avoid duplicates)
-      const existingTokens = new Set(mapped.map((d) => d.token));
-      for (const ad of apiDocs) {
-        if (!existingTokens.has(ad.token)) {
-          mapped.push(ad);
-        }
-      }
-
-      setFeishuDocs(mapped);
+      setFeishuDocs(docs);
     } catch (e) {
       console.error("Failed to load documents:", e);
       toast({ title: "文档加载失败", variant: "destructive" });
     } finally {
+      setLoadingDocs(false);
+    }
+  };
       setLoadingDocs(false);
     }
   };

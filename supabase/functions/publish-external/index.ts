@@ -233,8 +233,8 @@ serve(async (req) => {
         const sourceType: string = item.type;
         const baseUrl =
           sourceType === "hub"
-            ? `https://api-test.crescendia.ai/api/v1/hubs`
-            : `https://api-test.crescendia.ai/api/v1/spokes`;
+            ? `https://api.crescendia.ai/api/v1/hubs`
+            : `https://api.crescendia.ai/api/v1/spokes`;
 
         const url = `${baseUrl}?lang=${lang}`;
 

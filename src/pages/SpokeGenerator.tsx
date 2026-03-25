@@ -486,7 +486,23 @@ export default function SpokeGenerator() {
                 <FileText className="h-4 w-4" />
                 文档列表
                 <Badge variant="secondary" className="text-[10px]">{selectedDocs.length} 已选</Badge>
-                <div className="ml-auto">
+                <div className="ml-auto flex items-center gap-1">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="h-7 text-[10px] px-2"
+                    onClick={() => {
+                      if (selectedDocs.length === filteredDocs.length && filteredDocs.length > 0) {
+                        setSelectedDocs([]);
+                        setMode("single");
+                      } else {
+                        setSelectedDocs(filteredDocs.map((d) => d.token));
+                        if (filteredDocs.length > 1) setMode("batch");
+                      }
+                    }}
+                  >
+                    {selectedDocs.length === filteredDocs.length && filteredDocs.length > 0 ? "取消全选" : "全选"}
+                  </Button>
                   <DocFormDialog mode="create" onSubmit={handleCreateDoc} />
                 </div>
               </CardTitle>
@@ -549,21 +565,19 @@ export default function SpokeGenerator() {
             </CardContent>
           </Card>
 
-          {mode === "single" && (
-            <Card>
-              <CardHeader className="pb-3">
-                <CardTitle className="text-base">补充内容</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <Textarea
-                  placeholder="补充的原始文本内容、行业背景、关键词等…"
-                  value={scrapedData}
-                  onChange={(e) => setScrapedData(e.target.value)}
-                  className="min-h-[100px] font-mono text-xs"
-                />
-              </CardContent>
-            </Card>
-          )}
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base">补充内容</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <Textarea
+                placeholder={mode === "batch" ? "补充内容将应用于所有选中文档的生成…" : "补充的原始文本内容、行业背景、关键词等…"}
+                value={scrapedData}
+                onChange={(e) => setScrapedData(e.target.value)}
+                className="min-h-[100px] font-mono text-xs"
+              />
+            </CardContent>
+          </Card>
 
           <Card>
             <CardHeader className="pb-3">

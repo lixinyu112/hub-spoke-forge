@@ -229,7 +229,42 @@ export default function SpokeGenerator() {
     }
   };
 
-  const handleGenerateBatch = async () => {
+  const handleConfirmSave = async (editedCode: string) => {
+    if (!pendingSave) return;
+    try {
+      const editedJson = JSON.parse(editedCode);
+      await saveJsonRecord({
+        type: "spoke",
+        feishu_content: pendingSave.feishuContent,
+        prompt_content: pendingSave.promptUsed,
+        generated_json: editedJson,
+      });
+      await createSpoke({
+        theme_id: selectedTheme,
+        title: editedJson?.title || pendingSave.title,
+        json_data: editedJson,
+        feishu_doc_token: pendingSave.firstDoc?.token || null,
+        feishu_doc_title: pendingSave.firstDoc?.name || null,
+        status: "generated",
+      });
+      setOutput(editedCode);
+      setConfirmed(true);
+      setPendingSave(null);
+      toast({ title: "Spoke 已确认保存" });
+    } catch (e: any) {
+      toast({ title: "保存失败", description: e.message, variant: "destructive" });
+    }
+  };
+
+  const handleDiscardSave = () => {
+    setOutput("");
+    setPendingSave(null);
+    setConfirmed(false);
+    setValidation("idle");
+    toast({ title: "已放弃生成结果" });
+  };
+
+
     if (!selectedTheme) {
       toast({ title: "请选择主题", variant: "destructive" });
       return;

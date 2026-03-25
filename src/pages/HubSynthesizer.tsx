@@ -113,7 +113,41 @@ export default function HubSynthesizer() {
     }
   };
 
-  const parsedOutput = output ? (() => { try { return JSON.parse(output); } catch { return null; } })() : null;
+  const handleConfirmSave = async (editedCode: string) => {
+    if (!pendingSave) return;
+    try {
+      const editedJson = JSON.parse(editedCode);
+      await saveJsonRecord({
+        type: "hub",
+        feishu_content: pendingSave.spokeContent,
+        prompt_content: pendingSave.promptUsed,
+        generated_json: editedJson,
+      });
+      await createHub({
+        theme_id: selectedTheme,
+        title: editedJson?.title || themes.find((t) => t.id === selectedTheme)?.name + " — Hub",
+        slug: editedJson?.slug || null,
+        json_data: editedJson,
+        status: "generated",
+      });
+      setOutput(editedCode);
+      setConfirmed(true);
+      setPendingSave(null);
+      toast({ title: "Hub 已确认保存" });
+    } catch (e: any) {
+      toast({ title: "保存失败", description: e.message, variant: "destructive" });
+    }
+  };
+
+  const handleDiscardSave = () => {
+    setOutput("");
+    setPendingSave(null);
+    setConfirmed(false);
+    setValidation("idle");
+    toast({ title: "已放弃生成结果" });
+  };
+
+
   const hubSpecs = specs.filter((s) => s.type === "hub");
 
   return (

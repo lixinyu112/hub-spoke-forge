@@ -12,7 +12,7 @@ import { useProject } from "@/contexts/ProjectContext";
 import { getProjectTree, createTheme, updateTheme, createPublicationsBatch } from "@/lib/api";
 import { toast } from "@/hooks/use-toast";
 import { ContentTree, type TreeTheme } from "@/components/ContentTree";
-import { PublishDialog } from "@/components/PublishDialog";
+import { PublishDialog, type PublishReportData } from "@/components/PublishDialog";
 import { CodeViewer } from "@/components/CodeViewer";
 import { PromptConfigButton } from "@/components/PromptConfigButton";
 import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from "@/components/ui/resizable";
@@ -20,12 +20,7 @@ import { loadPromptConfig, savePromptConfig } from "@/lib/promptConfig";
 
 const THEME_NAME_REGEX = /^[a-z0-9][a-z0-9\-]*$/;
 
-export interface PublishReport {
-  total: number;
-  success: number;
-  failed: number;
-  details: { item_id: string; item_title: string; language: string; success: boolean; error?: string }[];
-}
+type PublishReport = PublishReportData;
 
 export default function ContentBrowser() {
   const { currentProject } = useProject();
@@ -521,10 +516,11 @@ export default function ContentBrowser() {
 
       <PublishDialog
         open={publishDialogOpen}
-        onOpenChange={setPublishDialogOpen}
+        onOpenChange={(open) => { setPublishDialogOpen(open); if (!open) setPublishReport(null); }}
         selectedCount={selectedItems.size}
         publishing={publishing}
         onPublish={handlePublish}
+        report={publishReport}
       />
     </div>
   );

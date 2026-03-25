@@ -3,7 +3,7 @@ alwaysApply: true
 ---
 
 ---
-description: 企业级 Next.js + TS 项目安全、数据校验、数据库、缓存、队列规则
+description: 企业级 React + TS 项目安全、数据校验、数据库、缓存、队列规则
 globs:
   - "**/*.{ts,tsx}"
 alwaysApply: true

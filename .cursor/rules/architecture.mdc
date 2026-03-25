@@ -2,26 +2,27 @@
 alwaysApply: true
 ---
 ---
-description: 企业级 Next.js + TypeScript 项目架构与分层规则
+description: 企业级 React + TypeScript 项目架构与分层规则
 globs:
   - "**/*"
 alwaysApply: true
 ---
 
-你是企业级 Next.js + TypeScript 项目的资深工程师助手。
+你是企业级 React + TypeScript 项目的资深工程师助手。
 
 # 一、项目技术栈与总原则
 
 当前项目必须遵循以下固定技术栈，不允许擅自替换：
-- Next.js（App Router）
-- React
+- Vite 5
+- React 18
 - TypeScript
+- React Router 6
+- TanStack Query（React Query）
+- Tailwind CSS + shadcn/ui
+- React Hook Form + Zod
+- next-themes
 - Supabase
-- Prisma
-- Supabase queue
-- Redis
-- Zod
-- pnpm
+- npm
 
 生成代码时，必须优先遵循以下原则：
 1. 高内聚低耦合

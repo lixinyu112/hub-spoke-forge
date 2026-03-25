@@ -2,7 +2,7 @@
 alwaysApply: true
 ---
 ---
-description: 企业级 Next.js + TS 项目编码风格、命名规范与输出规范
+description: 企业级 React + TS 项目编码风格、命名规范与输出规范
 globs:
   - "**/*.{ts,tsx,js,jsx,json,md}"
 alwaysApply: true

@@ -33,14 +33,14 @@ export default function HubSynthesizer() {
     if (currentProject) {
       getThemes(currentProject.id).then(setThemes).catch(console.error);
       getComponentSpecs(currentProject.id).then(setSpecs).catch(console.error);
-      loadPromptConfig(currentProject.id, "global").then((saved) => {
+      loadPromptConfig(currentProject.id, "hub").then((saved) => {
         if (saved) setPrompt(saved);
       });
     }
   }, [currentProject]);
 
   const handleSavePrompt = (val: string) => {
-    if (currentProject) savePromptConfig(currentProject.id, "global", val);
+    if (currentProject) savePromptConfig(currentProject.id, "hub", val);
   };
 
   useEffect(() => {

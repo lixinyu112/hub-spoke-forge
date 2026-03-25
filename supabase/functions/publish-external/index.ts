@@ -17,7 +17,7 @@ const LANG_NAMES: Record<string, string> = {
  * Translate JSON content to the target language using LLM.
  * Returns translated JSON object, or the original if translation fails or lang is zh.
  */
-async function translateJson(jsonData: any, targetLang: string): Promise<any> {
+async function translateJson(jsonData: any, targetLang: string, customSystemPrompt?: string): Promise<any> {
   if (targetLang === "zh") return jsonData; // 源语言，无需翻译
 
   const llmApiKey = Deno.env.get("CUSTOM_LLM_API_KEY");
@@ -27,7 +27,11 @@ async function translateJson(jsonData: any, targetLang: string): Promise<any> {
   }
 
   const langName = LANG_NAMES[targetLang] || targetLang;
-  const prompt = `你是一个专业翻译引擎。请将以下 JSON 中所有面向用户的文本内容翻译为 ${langName}（语言代码：${targetLang}）。
+
+  const defaultSystemPrompt = "你是一个精确的 JSON 翻译引擎，只输出翻译后的 JSON。";
+  const systemPrompt = customSystemPrompt || defaultSystemPrompt;
+
+  const prompt = `请将以下 JSON 中所有面向用户的文本内容翻译为 ${langName}（语言代码：${targetLang}）。
 规则：
 1. 只翻译 JSON 值中的自然语言文本（标题、描述、段落、按钮文案等）
 2. 不要翻译 JSON 的键名（key）
@@ -49,7 +53,7 @@ ${JSON.stringify(jsonData, null, 2)}`;
       body: JSON.stringify({
         model: "gemini-3.1-flash-lite-preview",
         messages: [
-          { role: "system", content: "你是一个精确的 JSON 翻译引擎，只输出翻译后的 JSON。" },
+          { role: "system", content: systemPrompt },
           { role: "user", content: prompt },
         ],
         temperature: 0.1,

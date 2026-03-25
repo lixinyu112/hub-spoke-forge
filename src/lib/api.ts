@@ -71,6 +71,27 @@ export async function updateSpoke(id: string, updates: Partial<TablesInsert<"spo
   return data;
 }
 
+export async function findSpokeByFeishuToken(themeId: string, feishuDocToken: string) {
+  const { data, error } = await supabase
+    .from("spokes")
+    .select("*")
+    .eq("theme_id", themeId)
+    .eq("feishu_doc_token", feishuDocToken)
+    .maybeSingle();
+  if (error) throw error;
+  return data;
+}
+
+export async function upsertSpoke(themeId: string, feishuDocToken: string | null, spokeData: Omit<TablesInsert<"spokes">, "theme_id">) {
+  if (feishuDocToken) {
+    const existing = await findSpokeByFeishuToken(themeId, feishuDocToken);
+    if (existing) {
+      return updateSpoke(existing.id, { ...spokeData, theme_id: themeId });
+    }
+  }
+  return createSpoke({ ...spokeData, theme_id: themeId });
+}
+
 // Component Specs
 export async function getComponentSpecs(projectId: string) {
   const { data, error } = await supabase.from("component_specs").select("*").eq("project_id", projectId).order("created_at");

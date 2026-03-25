@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { Network, ChevronRight, FileJson, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -35,6 +35,9 @@ export default function HubSynthesizer() {
   } | null>(null);
   const [confirmed, setConfirmed] = useState(false);
 
+  const parsedOutput = useMemo(() => {
+    try { return output ? JSON.parse(output) : null; } catch { return null; }
+  }, [output]);
   useEffect(() => {
     if (currentProject) {
       getThemes(currentProject.id).then(setThemes).catch(console.error);

@@ -265,6 +265,7 @@ export default function SpokeGenerator() {
   };
 
   const handleGenerateBatch = async () => {
+    if (!selectedTheme) {
       toast({ title: "请选择主题", variant: "destructive" });
       return;
     }

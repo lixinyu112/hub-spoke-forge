@@ -213,7 +213,7 @@ serve(async (req) => {
   }
 
   try {
-    const { items, languages } = await req.json();
+    const { items, languages, translate_prompt } = await req.json();
 
     if (!items?.length || !languages?.length) {
       return new Response(
@@ -247,8 +247,8 @@ serve(async (req) => {
         const sign = md5(baseString);
 
         try {
-          // Translate JSON content to target language
-          const translatedData = await translateJson(item.json_data, lang);
+          // Translate JSON content to target language using custom or default prompt
+          const translatedData = await translateJson(item.json_data, lang, translate_prompt);
 
           const resp = await fetch(url, {
             method: "POST",

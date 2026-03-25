@@ -177,7 +177,7 @@ export default function ContentBrowser() {
   const validateThemeName = (name: string) => {
     if (!name) { setThemeNameError(""); return false; }
     if (!THEME_NAME_REGEX.test(name)) {
-      setThemeNameError("仅允许英文小写字母与中划线（-），且以字母开头");
+      setThemeNameError("仅允许英文小写字母、数字与中划线（-），且以字母开头");
       return false;
     }
     setThemeNameError("");

@@ -52,7 +52,7 @@ export default function SpokeGenerator() {
     if (currentProject) {
       getThemes(currentProject.id).then(setThemes).catch(console.error);
       getComponentSpecs(currentProject.id).then(setSpecs).catch(console.error);
-      loadPromptConfig(currentProject.id, "global").then((saved) => {
+      loadPromptConfig(currentProject.id, "spoke").then((saved) => {
         if (saved) setPrompt(saved);
       });
       // Load documents from DB

@@ -145,7 +145,7 @@ Deno.serve(async (req) => {
       let codeContent = '';
       for (const b of allBlocks) {
         if (b.block_type === 14) {
-          codeContent = extractText(b.code?.body?.elements);
+          codeContent = extractText(b.code?.elements || b.code?.body?.elements);
           if (codeContent) break;
         }
       }

@@ -530,7 +530,7 @@ export default function SpokeGenerator() {
                   </TabsList>
                 </div>
                 <TabsContent value="json" className="flex-1 m-0">
-                  <CodeViewer code={output} loading={loading} filename="spoke-output.json" />
+                  <CodeViewer code={output} loading={loading} filename="spoke-output.json" editable={!!pendingSave} onConfirm={handleConfirmSave} onDiscard={handleDiscardSave} confirmed={confirmed} />
                 </TabsContent>
               </Tabs>
             )}

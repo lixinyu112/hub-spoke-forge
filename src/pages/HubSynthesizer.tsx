@@ -257,7 +257,7 @@ export default function HubSynthesizer() {
                 </TabsList>
               </div>
               <TabsContent value="json" className="flex-1 m-0">
-                <CodeViewer code={output} loading={loading} filename="hub-output.json" />
+                <CodeViewer code={output} loading={loading} filename="hub-output.json" editable={!!pendingSave} onConfirm={handleConfirmSave} onDiscard={handleDiscardSave} confirmed={confirmed} />
               </TabsContent>
               <TabsContent value="tree" className="flex-1 m-0 p-4 overflow-auto">
                 {parsedOutput ? (

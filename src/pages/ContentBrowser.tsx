@@ -205,6 +205,45 @@ export default function ContentBrowser() {
     }
   };
 
+  const openEditThemeDialog = () => {
+    if (!selectedNode || selectedNode.type !== "theme") return;
+    const t = selectedNode.data;
+    setEditThemeName(t.name || "");
+    setEditThemeDesc(t.description || "");
+    setEditThemeFeishuToken(t.feishu_doc_token || "");
+    setEditThemeNameError("");
+    setEditThemeDialogOpen(true);
+  };
+
+  const handleEditThemeNameChange = (val: string) => {
+    setEditThemeName(val);
+    if (val && !THEME_NAME_REGEX.test(val)) {
+      setEditThemeNameError("仅允许英文小写字母、数字与中划线（-），且以字母或数字开头");
+    } else {
+      setEditThemeNameError("");
+    }
+  };
+
+  const handleUpdateTheme = async () => {
+    if (!selectedNode || selectedNode.type !== "theme") return;
+    if (!editThemeName.trim() || editThemeNameError) return;
+    try {
+      await updateTheme(selectedNode.data.id, {
+        name: editThemeName.trim(),
+        description: editThemeDesc.trim() || undefined,
+        feishu_doc_token: editThemeFeishuToken.trim() || undefined,
+      });
+      setEditThemeDialogOpen(false);
+      toast({ title: "主题已更新" });
+      await loadTree();
+      // Update selectedNode with new data
+      setSelectedNode({ type: "theme", data: { ...selectedNode.data, name: editThemeName.trim(), description: editThemeDesc.trim(), feishu_doc_token: editThemeFeishuToken.trim() } });
+    } catch (e) {
+      console.error(e);
+      toast({ title: "更新失败", variant: "destructive" });
+    }
+  };
+
   return (
     <div className="p-6 h-full flex flex-col gap-4">
       <div className="flex items-center justify-between">

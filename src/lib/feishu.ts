@@ -41,3 +41,23 @@ export async function fetchFeishuDocContent(docToken: string, docType: string = 
   }
   return res.json();
 }
+
+export async function extractAgent3Code(docToken: string): Promise<{ agent3_found: boolean; code_blocks: string[] }> {
+  const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+  const anonKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
+  const params = new URLSearchParams({ action: 'extract_agent3_code', doc_token: docToken });
+
+  const res = await fetch(`${supabaseUrl}/functions/v1/feishu-docs?${params.toString()}`, {
+    headers: {
+      'apikey': anonKey,
+      'Content-Type': 'application/json',
+    },
+  });
+
+  if (!res.ok) {
+    const errBody = await res.text();
+    throw new Error(`Extract Agent3 code error: ${errBody}`);
+  }
+  const json = await res.json();
+  return json.data || { agent3_found: false, code_blocks: [] };
+}

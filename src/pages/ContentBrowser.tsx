@@ -18,7 +18,7 @@ import { PromptConfigButton } from "@/components/PromptConfigButton";
 import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from "@/components/ui/resizable";
 import { loadPromptConfig, savePromptConfig } from "@/lib/promptConfig";
 
-const THEME_NAME_REGEX = /^[a-z][a-z\-]*$/;
+const THEME_NAME_REGEX = /^[a-z][a-z0-9\-]*$/;
 
 export default function ContentBrowser() {
   const { currentProject } = useProject();

@@ -88,26 +88,69 @@ export default function SpokeGenerator() {
         type: d.type,
         manualContent: d.content || undefined,
       }));
-      // Also load feishu API docs and merge (avoid duplicates)
+
+      // Load feishu API docs based on selected theme's folder token
+      let apiDocs: FeishuDoc[] = [];
       try {
         const themeObj = themes.find((t) => t.id === selectedTheme);
         const folderToken = themeObj?.feishu_doc_token || undefined;
         const res = await fetchFeishuDocs(feishuSearch || undefined, folderToken);
-        let apiDocs: FeishuDoc[] = [];
-        console.log('feiShuDocs=====', res)
+        console.log('feiShuDocs=====', res);
         if (res?.data?.files) {
           apiDocs = res.data.files.map((f: any) => ({ token: f.token, name: f.name, type: f.type, url: f.url }));
         } else if (res?.data?.docs_entities) {
           apiDocs = res.data.docs_entities.map((d: any) => ({ token: d.docs_token, name: d.title, type: d.docs_type, url: d.url }));
         }
-        const existingTokens = new Set(mapped.map((d) => d.token));
-        for (const ad of apiDocs) {
-          if (!existingTokens.has(ad.token)) mapped.push(ad);
-        }
       } catch (e) {
         console.warn("飞书 API 文档加载失败:", e);
       }
+
+      // For each API doc not already in DB, extract Agent3 code blocks and upsert
+      const existingTokens = new Set(mapped.map((d) => d.token));
+      let syncCount = 0;
+      for (const ad of apiDocs) {
+        try {
+          const result = await extractAgent3Code(ad.token);
+          const codeContent = result.agent3_found && result.code_blocks.length > 0
+            ? result.code_blocks.join("\n\n---\n\n")
+            : undefined;
+
+          if (existingTokens.has(ad.token)) {
+            // Update existing doc with Agent3 code content
+            if (codeContent) {
+              await updateDocument(currentProject.id, ad.token, { name: ad.name, content: codeContent });
+              const existing = mapped.find((d) => d.token === ad.token);
+              if (existing) {
+                existing.manualContent = codeContent;
+                existing.name = ad.name;
+              }
+              syncCount++;
+            }
+          } else {
+            // Create new doc with Agent3 code content
+            await createDocument({
+              project_id: currentProject.id,
+              token: ad.token,
+              name: ad.name,
+              type: ad.type || "docx",
+              content: codeContent,
+            });
+            mapped.push({ token: ad.token, name: ad.name, type: ad.type, manualContent: codeContent });
+            syncCount++;
+          }
+        } catch (e) {
+          console.warn(`文档 ${ad.name} Agent3 代码提取失败:`, e);
+          // Still add to list even if extraction fails
+          if (!existingTokens.has(ad.token)) {
+            mapped.push(ad);
+          }
+        }
+      }
+
       setFeishuDocs(mapped);
+      if (syncCount > 0) {
+        toast({ title: `已同步 ${syncCount} 个文档的 Agent3 代码块` });
+      }
     } catch (e) {
       console.error("Failed to load documents:", e);
       toast({ title: "文档加载失败", variant: "destructive" });

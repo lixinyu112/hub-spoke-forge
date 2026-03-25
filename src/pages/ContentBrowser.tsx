@@ -47,14 +47,9 @@ export default function ContentBrowser() {
     }
   }, [currentProject]);
 
-  // Save prompt debounced
-  useEffect(() => {
-    if (!currentProject || !prompt) return;
-    const timer = setTimeout(() => {
-      savePromptConfig(currentProject.id, "browser", prompt);
-    }, 1000);
-    return () => clearTimeout(timer);
-  }, [prompt, currentProject]);
+  const handleSavePrompt = (val: string) => {
+    if (currentProject) savePromptConfig(currentProject.id, "browser", val);
+  };
 
   const loadTree = useCallback(async () => {
     if (!currentProject) return;

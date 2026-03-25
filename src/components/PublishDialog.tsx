@@ -31,9 +31,10 @@ interface PublishDialogProps {
   publishing: boolean;
   onPublish: (languages: string[]) => void;
   report?: PublishReportData | null;
+  progress?: { total: number; done: number } | null;
 }
 
-export function PublishDialog({ open, onOpenChange, selectedCount, publishing, onPublish, report }: PublishDialogProps) {
+export function PublishDialog({ open, onOpenChange, selectedCount, publishing, onPublish, report, progress }: PublishDialogProps) {
   const [selectedLangs, setSelectedLangs] = useState<Set<string>>(new Set(["zh"]));
 
   const toggleLang = (code: string) => {
@@ -153,12 +154,28 @@ export function PublishDialog({ open, onOpenChange, selectedCount, publishing, o
             )}
           </div>
         </div>
-        <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={publishing}>取消</Button>
-          <Button onClick={handlePublish} disabled={selectedLangs.size === 0 || publishing}>
-            {publishing && <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />}
-            发布 ({selectedLangs.size} 语言)
-          </Button>
+        <DialogFooter className="flex-col gap-3 sm:flex-col">
+          {publishing && progress && (
+            <div className="w-full space-y-1.5">
+              <div className="flex items-center gap-3">
+                <div className="flex-1 h-2 bg-muted rounded-full overflow-hidden">
+                  <div
+                    className="h-full bg-primary rounded-full transition-all duration-500"
+                    style={{ width: `${progress.total > 0 ? (progress.done / progress.total) * 100 : 0}%` }}
+                  />
+                </div>
+                <span className="text-xs font-mono text-muted-foreground shrink-0">{progress.done}/{progress.total}</span>
+              </div>
+              <p className="text-xs text-muted-foreground text-center">正在发布中…</p>
+            </div>
+          )}
+          <div className="flex gap-2 justify-end w-full">
+            <Button variant="outline" onClick={() => onOpenChange(false)} disabled={publishing}>取消</Button>
+            <Button onClick={handlePublish} disabled={selectedLangs.size === 0 || publishing}>
+              {publishing && <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />}
+              发布 ({selectedLangs.size} 语言)
+            </Button>
+          </div>
         </DialogFooter>
       </DialogContent>
     </Dialog>

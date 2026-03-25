@@ -69,7 +69,12 @@ export default function SpokeGenerator() {
   }, [currentProject]);
 
   useEffect(() => {
-    handleLoadDocuments()
+    if (selectedTheme) {
+      setFeishuDocs([]);
+      setSelectedDocs([]);
+      setMode("single");
+      handleLoadDocuments();
+    }
   }, [selectedTheme])
 
   const handleSavePrompt = (val: string) => {

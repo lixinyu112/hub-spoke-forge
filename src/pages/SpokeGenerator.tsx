@@ -121,9 +121,6 @@ export default function SpokeGenerator() {
       setLoadingDocs(false);
     }
   };
-      setLoadingDocs(false);
-    }
-  };
 
   const handleSyncAgent3 = async () => {
     if (!currentProject || feishuDocs.length === 0) return;

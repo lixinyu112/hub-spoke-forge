@@ -20,6 +20,13 @@ import { loadPromptConfig, savePromptConfig } from "@/lib/promptConfig";
 
 const THEME_NAME_REGEX = /^[a-z0-9][a-z0-9\-]*$/;
 
+export interface PublishReport {
+  total: number;
+  success: number;
+  failed: number;
+  details: { item_id: string; item_title: string; language: string; success: boolean; error?: string }[];
+}
+
 export default function ContentBrowser() {
   const { currentProject } = useProject();
   const [allThemes, setAllThemes] = useState<TreeTheme[]>([]);

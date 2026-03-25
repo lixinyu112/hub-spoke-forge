@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Sparkles, FileText, Search, Loader2, ChevronDown, ChevronRight, Pencil } from "lucide-react";
+import { Sparkles, FileText, Search, Loader2, Pencil } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
@@ -15,10 +15,12 @@ import { useProject } from "@/contexts/ProjectContext";
 import { getThemes, getComponentSpecs, createSpoke } from "@/lib/api";
 import { fetchFeishuDocs, fetchFeishuDocContent } from "@/lib/feishu";
 import { generateJson, saveJsonRecord } from "@/lib/generate";
+import { loadPromptConfig, savePromptConfig } from "@/lib/promptConfig";
 import { toast } from "@/hooks/use-toast";
 import type { Theme, ComponentSpec } from "@/lib/api";
 import { PromptConfigButton } from "@/components/PromptConfigButton";
 import { DocFormDialog } from "@/components/DocFormDialog";
+
 interface FeishuDoc {
   token: string;
   name: string;
@@ -26,17 +28,6 @@ interface FeishuDoc {
   url?: string;
   manualContent?: string;
 }
-
-const MOCK_FEISHU_DOCS: FeishuDoc[] = [
-  { token: "doxcnXYZ001", name: "AWS EC2 部署最佳实践", type: "docx" },
-  { token: "doxcnXYZ002", name: "Kubernetes 入门教程", type: "docx" },
-  { token: "doxcnXYZ003", name: "Docker 容器化指南", type: "docx" },
-  { token: "doxcnXYZ004", name: "CI/CD 流水线配置", type: "docx" },
-  { token: "doxcnXYZ005", name: "微服务架构设计", type: "docx" },
-  { token: "doxcnXYZ006", name: "数据库性能优化", type: "docx" },
-  { token: "doxcnXYZ007", name: "API 网关方案对比", type: "docx" },
-];
-
 
 export default function SpokeGenerator() {
   const { currentProject } = useProject();
@@ -47,14 +38,11 @@ export default function SpokeGenerator() {
   const [themes, setThemes] = useState<Theme[]>([]);
   const [specs, setSpecs] = useState<ComponentSpec[]>([]);
   const [selectedTheme, setSelectedTheme] = useState("");
-  const [keyword, setKeyword] = useState("");
-  const [author, setAuthor] = useState("");
-  const [cta, setCta] = useState("");
   const [scrapedData, setScrapedData] = useState("");
   const [prompt, setPrompt] = useState("");
 
   // Feishu docs
-  const [feishuDocs, setFeishuDocs] = useState<FeishuDoc[]>(MOCK_FEISHU_DOCS);
+  const [feishuDocs, setFeishuDocs] = useState<FeishuDoc[]>([]);
   const [feishuSearch, setFeishuSearch] = useState("");
   const [selectedDocs, setSelectedDocs] = useState<string[]>([]);
   const [loadingDocs, setLoadingDocs] = useState(false);
@@ -64,8 +52,21 @@ export default function SpokeGenerator() {
     if (currentProject) {
       getThemes(currentProject.id).then(setThemes).catch(console.error);
       getComponentSpecs(currentProject.id).then(setSpecs).catch(console.error);
+      // Load saved prompt from DB
+      loadPromptConfig(currentProject.id, "spoke").then((saved) => {
+        if (saved) setPrompt(saved);
+      });
     }
   }, [currentProject]);
+
+  // Save prompt to DB when it changes (debounced)
+  useEffect(() => {
+    if (!currentProject || !prompt) return;
+    const timer = setTimeout(() => {
+      savePromptConfig(currentProject.id, "spoke", prompt);
+    }, 1000);
+    return () => clearTimeout(timer);
+  }, [prompt, currentProject]);
 
   useEffect(() => {
     handleLoadFeishuDocs();
@@ -81,8 +82,8 @@ export default function SpokeGenerator() {
         setFeishuDocs(res.data.docs_entities.map((d: any) => ({ token: d.docs_token, name: d.title, type: d.docs_type, url: d.url })));
       }
     } catch (e) {
-      console.error("Failed to load feishu docs, using mock data:", e);
-      toast({ title: "飞书文档加载失败", description: "使用模拟数据显示。请检查飞书应用权限配置。", variant: "destructive" });
+      console.error("Failed to load feishu docs:", e);
+      toast({ title: "飞书文档加载失败", description: "请检查飞书应用权限配置。", variant: "destructive" });
     } finally {
       setLoadingDocs(false);
     }
@@ -105,7 +106,6 @@ export default function SpokeGenerator() {
       return [{ token: data.token, name: data.name, type: "manual", manualContent: data.content || undefined }, ...prev];
     });
     setSelectedDocs((prev) => [...prev, data.token]);
-    if (data.content) setScrapedData(data.content);
     toast({ title: "文档已创建并选中" });
   };
 
@@ -125,47 +125,50 @@ export default function SpokeGenerator() {
       toast({ title: "请选择主题", variant: "destructive" });
       return;
     }
-    if(selectedDocs.length === 0) {
+    if (selectedDocs.length === 0) {
       toast({ title: "请选择至少一个飞书文档", variant: "destructive" });
       return;
     }
     setLoading(true);
     setOutput("");
     setValidation("idle");
-    const contents:string [] = [];
-   for(let i = 0; i < selectedDocs.length; i++) {
-    const doc = feishuDocs.find((d) => d.token === selectedDocs[i]);
-    try {
-      const docRes = await fetchFeishuDocContent(doc.token, doc.type);
-      contents.push(docRes?.data?.content || JSON.stringify(docRes?.data) || doc.name);
-    } catch (e) {
-      console.warn("飞书文档内容获取失败，使用文档标题:", e);
-    } finally {
-      setLoading(false);
-    }
+
+    // Collect all selected doc contents
+    const contentParts: string[] = [];
+    for (const token of selectedDocs) {
+      const doc = feishuDocs.find((d) => d.token === token);
+      if (!doc) continue;
+      if (doc.type === "manual" && doc.manualContent) {
+        contentParts.push(`【${doc.name}】\n${doc.manualContent}`);
+      } else {
+        try {
+          const docRes = await fetchFeishuDocContent(doc.token, doc.type);
+          const content = docRes?.data?.content || JSON.stringify(docRes?.data) || doc.name;
+          contentParts.push(`【${doc.name}】\n${content}`);
+        } catch (e) {
+          console.warn("飞书文档内容获取失败，使用文档标题:", e);
+          contentParts.push(`【${doc.name}】`);
+        }
+      }
     }
 
     try {
-      // 第一步：获取飞书文档内容
-      let feishuContent = scrapedData || "";
-      if (!feishuContent && keyword) feishuContent = keyword;
+      const feishuContent = contentParts.join("\n\n---\n\n");
+      const firstDoc = feishuDocs.find((d) => d.token === selectedDocs[0]);
 
-      // 第二步：调用 AI 生成 Spoke JSON
       const result = await generateJson({
         type: "spoke",
         feishu_content: feishuContent,
         custom_prompt: prompt || undefined,
-        context: [keyword, author, cta].filter(Boolean).join("；"),
+        context: scrapedData || undefined,
       });
 
       const generatedJson = result.generated_json;
       const json = JSON.stringify(generatedJson, null, 2);
       setOutput(json);
-      // 宽松验证：只要是有效对象即视为通过
       setValidation(generatedJson && typeof generatedJson === "object" ? "passed" : "failed");
 
-      // 第三步：保存到 json_records 表
-      const title = generatedJson?.title || doc?.name || keyword || "未命名 Spoke";
+      const title = generatedJson?.title || firstDoc?.name || "未命名 Spoke";
       await saveJsonRecord({
         type: "spoke",
         feishu_content: feishuContent,
@@ -173,13 +176,12 @@ export default function SpokeGenerator() {
         generated_json: generatedJson,
       });
 
-      // 同时保存到 spokes 表
       await createSpoke({
         theme_id: selectedTheme,
         title,
         json_data: generatedJson,
-        feishu_doc_token: doc?.token || null,
-        feishu_doc_title: doc?.name || null,
+        feishu_doc_token: firstDoc?.token || null,
+        feishu_doc_title: firstDoc?.name || null,
         status: "generated",
       });
       toast({ title: "Spoke 已生成并保存" });
@@ -212,25 +214,25 @@ export default function SpokeGenerator() {
       const doc = feishuDocs.find((d) => d.token === selectedDocs[i]);
       const docTitle = doc?.name || `Spoke ${i + 1}`;
       try {
-        // 获取飞书文档内容
         let feishuContent = docTitle;
-        if (doc) {
+        if (doc?.type === "manual" && doc.manualContent) {
+          feishuContent = doc.manualContent;
+        } else if (doc) {
           try {
             const docRes = await fetchFeishuDocContent(doc.token, doc.type);
             feishuContent = docRes?.data?.content || JSON.stringify(docRes?.data) || docTitle;
           } catch { /* fallback to title */ }
         }
 
-        // 调用 AI 生成
         const result = await generateJson({
           type: "spoke",
           feishu_content: feishuContent,
           custom_prompt: prompt || undefined,
+          context: scrapedData || undefined,
         });
         const generatedJson = result.generated_json;
         const title = generatedJson?.title || docTitle;
 
-        // 保存到 json_records
         await saveJsonRecord({
           type: "spoke",
           feishu_content: feishuContent,
@@ -238,7 +240,6 @@ export default function SpokeGenerator() {
           generated_json: generatedJson,
         });
 
-        // 保存到 spokes 表
         await createSpoke({
           theme_id: selectedTheme,
           title,
@@ -284,7 +285,6 @@ export default function SpokeGenerator() {
       <div className="flex-1 grid lg:grid-cols-2 gap-4 min-h-0">
         {/* Left */}
         <div className="flex flex-col gap-4 overflow-auto">
-          {/* Theme selector */}
           <Card>
             <CardHeader className="pb-3">
               <CardTitle className="text-base">选择主题</CardTitle>
@@ -306,7 +306,6 @@ export default function SpokeGenerator() {
             </CardContent>
           </Card>
 
-          {/* Feishu docs */}
           <Card>
             <CardHeader className="pb-3">
               <CardTitle className="text-base flex items-center gap-2">
@@ -334,6 +333,9 @@ export default function SpokeGenerator() {
                 </Button>
               </div>
               <div className="max-h-[240px] overflow-auto space-y-1">
+                {filteredDocs.length === 0 && (
+                  <p className="text-xs text-muted-foreground py-4 text-center">暂无文档，点击右上角「+」手动创建或刷新获取飞书文档</p>
+                )}
                 {filteredDocs.map((doc) => (
                   <label
                     key={doc.token}
@@ -372,26 +374,14 @@ export default function SpokeGenerator() {
           {mode === "single" && (
             <Card>
               <CardHeader className="pb-3">
-                <CardTitle className="text-base">手动输入数据</CardTitle>
+                <CardTitle className="text-base">补充内容</CardTitle>
               </CardHeader>
-              <CardContent className="space-y-3">
-                <div>
-                  <Label className="text-xs">目标关键词</Label>
-                  <Input placeholder="例如：AWS EC2 部署指南" value={keyword} onChange={(e) => setKeyword(e.target.value)} className="mt-1" />
-                </div>
-                <div>
-                  <Label className="text-xs">作者</Label>
-                  <Input placeholder="例如：DevOps 团队" value={author} onChange={(e) => setAuthor(e.target.value)} className="mt-1" />
-                </div>
-                <div>
-                  <Label className="text-xs">行动号召</Label>
-                  <Input placeholder="例如：开始免费试用" value={cta} onChange={(e) => setCta(e.target.value)} className="mt-1" />
-                </div>
+              <CardContent>
                 <Textarea
-                  placeholder="补充的原始文本内容…"
+                  placeholder="补充的原始文本内容、行业背景、关键词等…"
                   value={scrapedData}
                   onChange={(e) => setScrapedData(e.target.value)}
-                  className="min-h-[80px] font-mono text-xs"
+                  className="min-h-[100px] font-mono text-xs"
                 />
               </CardContent>
             </Card>

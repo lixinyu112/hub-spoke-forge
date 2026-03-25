@@ -16,6 +16,7 @@ import { PublishDialog } from "@/components/PublishDialog";
 import { CodeViewer } from "@/components/CodeViewer";
 import { PromptConfigButton } from "@/components/PromptConfigButton";
 import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from "@/components/ui/resizable";
+import { loadPromptConfig, savePromptConfig } from "@/lib/promptConfig";
 
 const THEME_NAME_REGEX = /^[a-z][a-z\-]*$/;
 
@@ -35,6 +36,24 @@ export default function ContentBrowser() {
   const [newThemeDesc, setNewThemeDesc] = useState("");
   const [themeNameError, setThemeNameError] = useState("");
   const [prompt, setPrompt] = useState("");
+
+  // Load saved prompt
+  useEffect(() => {
+    if (currentProject) {
+      loadPromptConfig(currentProject.id, "browser").then((saved) => {
+        if (saved) setPrompt(saved);
+      });
+    }
+  }, [currentProject]);
+
+  // Save prompt debounced
+  useEffect(() => {
+    if (!currentProject || !prompt) return;
+    const timer = setTimeout(() => {
+      savePromptConfig(currentProject.id, "browser", prompt);
+    }, 1000);
+    return () => clearTimeout(timer);
+  }, [prompt, currentProject]);
 
   const loadTree = useCallback(async () => {
     if (!currentProject) return;

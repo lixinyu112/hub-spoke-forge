@@ -52,10 +52,11 @@ export default function SpokeGenerator() {
     if (currentProject) {
       getThemes(currentProject.id).then(setThemes).catch(console.error);
       getComponentSpecs(currentProject.id).then(setSpecs).catch(console.error);
-      // Load saved prompt from DB
       loadPromptConfig(currentProject.id, "spoke").then((saved) => {
         if (saved) setPrompt(saved);
       });
+      // Load documents from DB
+      handleLoadDocuments();
     }
   }, [currentProject]);
 
@@ -68,9 +69,42 @@ export default function SpokeGenerator() {
     return () => clearTimeout(timer);
   }, [prompt, currentProject]);
 
-  useEffect(() => {
-    handleLoadFeishuDocs();
-  }, []);
+  const handleLoadDocuments = async () => {
+    if (!currentProject) return;
+    setLoadingDocs(true);
+    try {
+      // Load DB-persisted documents
+      const dbDocs = await getDocuments(currentProject.id);
+      const mapped: FeishuDoc[] = dbDocs.map((d: any) => ({
+        token: d.token,
+        name: d.name,
+        type: d.type,
+        manualContent: d.content || undefined,
+      }));
+      // Also load feishu API docs and merge (avoid duplicates)
+      try {
+        const res = await fetchFeishuDocs(feishuSearch || undefined);
+        let apiDocs: FeishuDoc[] = [];
+        if (res?.data?.files) {
+          apiDocs = res.data.files.map((f: any) => ({ token: f.token, name: f.name, type: f.type, url: f.url }));
+        } else if (res?.data?.docs_entities) {
+          apiDocs = res.data.docs_entities.map((d: any) => ({ token: d.docs_token, name: d.title, type: d.docs_type, url: d.url }));
+        }
+        const existingTokens = new Set(mapped.map((d) => d.token));
+        for (const ad of apiDocs) {
+          if (!existingTokens.has(ad.token)) mapped.push(ad);
+        }
+      } catch (e) {
+        console.warn("飞书 API 文档加载失败:", e);
+      }
+      setFeishuDocs(mapped);
+    } catch (e) {
+      console.error("Failed to load documents:", e);
+      toast({ title: "文档加载失败", variant: "destructive" });
+    } finally {
+      setLoadingDocs(false);
+    }
+  };
 
   const handleLoadFeishuDocs = async () => {
     setLoadingDocs(true);

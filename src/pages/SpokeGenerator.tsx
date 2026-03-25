@@ -477,6 +477,10 @@ export default function SpokeGenerator() {
                 <Button variant="outline" size="sm" onClick={handleLoadDocuments} disabled={loadingDocs} className="h-9 text-xs">
                   {loadingDocs ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : "刷新"}
                 </Button>
+                <Button variant="outline" size="sm" onClick={handleSyncAgent3} disabled={syncing || feishuDocs.length === 0} className="h-9 text-xs gap-1">
+                  {syncing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
+                  同步 Agent3
+                </Button>
               </div>
               <div className="max-h-[240px] overflow-auto space-y-1">
                 {filteredDocs.length === 0 && (

@@ -12,7 +12,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { CodeViewer } from "@/components/CodeViewer";
 import { ValidationBar } from "@/components/ValidationBar";
 import { useProject } from "@/contexts/ProjectContext";
-import { getThemes, getComponentSpecs, createSpoke, getDocuments, createDocument, updateDocument } from "@/lib/api";
+import { getThemes, getComponentSpecs, createSpoke, updateSpoke, upsertSpoke, getDocuments, createDocument, updateDocument } from "@/lib/api";
 import { fetchFeishuDocs, fetchFeishuDocContent, extractFirstCode } from "@/lib/feishu";
 import { generateJson, saveJsonRecord } from "@/lib/generate";
 import { loadPromptConfig, savePromptConfig } from "@/lib/promptConfig";
@@ -308,8 +308,7 @@ export default function SpokeGenerator() {
         prompt_content: pendingSave.promptUsed,
         generated_json: editedJson,
       });
-      await createSpoke({
-        theme_id: selectedTheme,
+      await upsertSpoke(selectedTheme, pendingSave.firstDoc?.token || null, {
         title: editedJson?.title || pendingSave.title,
         json_data: editedJson,
         feishu_doc_token: pendingSave.firstDoc?.token || null,
@@ -383,8 +382,7 @@ export default function SpokeGenerator() {
           generated_json: generatedJson,
         });
 
-        await createSpoke({
-          theme_id: selectedTheme,
+        await upsertSpoke(selectedTheme, doc?.token || null, {
           title,
           json_data: generatedJson,
           feishu_doc_token: doc?.token || null,

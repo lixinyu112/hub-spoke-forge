@@ -12,13 +12,15 @@ import { useProject } from "@/contexts/ProjectContext";
 import { getProjectTree, createTheme, updateTheme, createPublicationsBatch } from "@/lib/api";
 import { toast } from "@/hooks/use-toast";
 import { ContentTree, type TreeTheme } from "@/components/ContentTree";
-import { PublishDialog } from "@/components/PublishDialog";
+import { PublishDialog, type PublishReportData } from "@/components/PublishDialog";
 import { CodeViewer } from "@/components/CodeViewer";
 import { PromptConfigButton } from "@/components/PromptConfigButton";
 import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from "@/components/ui/resizable";
 import { loadPromptConfig, savePromptConfig } from "@/lib/promptConfig";
 
 const THEME_NAME_REGEX = /^[a-z0-9][a-z0-9\-]*$/;
+
+type PublishReport = PublishReportData;
 
 export default function ContentBrowser() {
   const { currentProject } = useProject();
@@ -32,6 +34,7 @@ export default function ContentBrowser() {
   const [themeDialogOpen, setThemeDialogOpen] = useState(false);
   const [publishDialogOpen, setPublishDialogOpen] = useState(false);
   const [publishing, setPublishing] = useState(false);
+  const [publishReport, setPublishReport] = useState<PublishReport | null>(null);
   const [newThemeName, setNewThemeName] = useState("");
   const [newThemeDesc, setNewThemeDesc] = useState("");
   const [newThemeFeishuToken, setNewThemeFeishuToken] = useState("");
@@ -102,6 +105,33 @@ export default function ContentBrowser() {
     setSelectedItems((prev) => { const n = new Set(prev); n.has(key) ? n.delete(key) : n.add(key); return n; });
   };
 
+  // Compute all selectable keys from filtered tree
+  const allSelectableKeys = useMemo(() => {
+    const keys = new Set<string>();
+    for (const theme of filteredTree) {
+      for (const hub of theme.hubs) {
+        keys.add(`hub:${hub.id}`);
+        for (const spoke of hub.spokes) {
+          keys.add(`spoke:${spoke.id}`);
+        }
+      }
+      for (const spoke of theme.unlinkedSpokes) {
+        keys.add(`spoke:${spoke.id}`);
+      }
+    }
+    return keys;
+  }, [filteredTree]);
+
+  const isAllSelected = allSelectableKeys.size > 0 && [...allSelectableKeys].every((k) => selectedItems.has(k));
+
+  const handleSelectAll = () => {
+    if (isAllSelected) {
+      setSelectedItems(new Set());
+    } else {
+      setSelectedItems(new Set(allSelectableKeys));
+    }
+  };
+
   const getSelectedData = () => {
     const items: { type: "hub" | "spoke"; id: string; title: string; json_data: any }[] = [];
     for (const key of selectedItems) {
@@ -122,6 +152,8 @@ export default function ContentBrowser() {
   const handlePublish = async (languages: string[]) => {
     if (!currentProject) return;
     setPublishing(true);
+    setPublishReport(null);
+
     try {
       const items = getSelectedData();
 
@@ -139,34 +171,100 @@ export default function ContentBrowser() {
       );
       await createPublicationsBatch(pubs);
 
-      // 2. 调用外部 API 推送
-      try {
-        const { data: extResult, error: extError } = await supabase.functions.invoke("publish-external", {
-          body: {
-            items: items.map((item) => ({
-              id: item.id,
-              type: item.type,
-              title: item.title,
-              json_data: item.json_data,
-            })),
-            languages,
-          },
-        });
-        if (extError) {
-          console.error("外部 API 推送失败:", extError);
-          toast({ title: `已保存到数据库，但外部推送失败: ${extError.message}`, variant: "destructive" });
-        } else if (extResult?.failed > 0) {
-          toast({ title: `已发布 ${items.length} 项 × ${languages.length} 语言，外部推送部分失败 (${extResult.failed}/${extResult.total})`, variant: "destructive" });
-        } else {
-          toast({ title: `已发布 ${items.length} 项内容 × ${languages.length} 种语言（含外部推送）` });
+      // 2. 分批推送外部 API，每批最多 3 个 item
+      const BATCH_SIZE = 3;
+      const MAX_RETRIES = 2;
+      type PublishResult = { item_id: string; item_title: string; language: string; success: boolean; error?: string };
+      const allResults: PublishResult[] = [];
+
+      for (let i = 0; i < items.length; i += BATCH_SIZE) {
+        const batch = items.slice(i, i + BATCH_SIZE);
+        for (const lang of languages) {
+          try {
+            const { data: extResult, error: extError } = await supabase.functions.invoke("publish-external", {
+              body: {
+                items: batch.map((item) => ({
+                  id: item.id,
+                  type: item.type,
+                  title: item.title,
+                  json_data: item.json_data,
+                })),
+                languages: [lang],
+              },
+            });
+            if (extError) {
+              batch.forEach((item) => allResults.push({ item_id: item.id, item_title: item.title, language: lang, success: false, error: extError.message }));
+            } else if (extResult?.results) {
+              for (const r of extResult.results) {
+                const item = batch.find((b) => b.id === r.item_id);
+                allResults.push({ item_id: r.item_id, item_title: item?.title || r.item_id, language: r.language, success: r.success, error: r.error });
+              }
+            }
+          } catch (err: any) {
+            batch.forEach((item) => allResults.push({ item_id: item.id, item_title: item.title, language: lang, success: false, error: String(err) }));
+          }
         }
-      } catch (extErr) {
-        console.error("外部 API 调用异常:", extErr);
-        toast({ title: "已保存到数据库，但外部推送异常", variant: "destructive" });
       }
 
-      setSelectedItems(new Set());
-      setPublishDialogOpen(false);
+      // 3. 对失败项进行重试
+      const failedItems = allResults.filter((r) => !r.success);
+      if (failedItems.length > 0) {
+        for (let retry = 0; retry < MAX_RETRIES; retry++) {
+          const stillFailed = allResults.filter((r) => !r.success);
+          if (stillFailed.length === 0) break;
+
+          // Group by language for retry
+          const retryByLang = new Map<string, typeof stillFailed>();
+          for (const f of stillFailed) {
+            if (!retryByLang.has(f.language)) retryByLang.set(f.language, []);
+            retryByLang.get(f.language)!.push(f);
+          }
+
+          for (const [lang, failedGroup] of retryByLang) {
+            const retryItems = failedGroup.map((f) => {
+              const item = items.find((it) => it.id === f.item_id);
+              return item ? { id: item.id, type: item.type, title: item.title, json_data: item.json_data } : null;
+            }).filter(Boolean);
+
+            if (retryItems.length === 0) continue;
+
+            try {
+              const { data: retryResult, error: retryError } = await supabase.functions.invoke("publish-external", {
+                body: { items: retryItems, languages: [lang] },
+              });
+
+              if (!retryError && retryResult?.results) {
+                for (const r of retryResult.results) {
+                  const idx = allResults.findIndex((ar) => ar.item_id === r.item_id && ar.language === r.language);
+                  if (idx >= 0 && r.success) {
+                    allResults[idx] = { ...allResults[idx], success: true, error: undefined };
+                  }
+                }
+              }
+            } catch { /* retry failed silently */ }
+          }
+        }
+      }
+
+      // 4. 生成报告
+      const successCount = allResults.filter((r) => r.success).length;
+      const failCount = allResults.filter((r) => !r.success).length;
+      const report: PublishReport = {
+        total: allResults.length,
+        success: successCount,
+        failed: failCount,
+        details: allResults,
+      };
+      setPublishReport(report);
+
+      if (failCount === 0) {
+        toast({ title: `全部发布成功：${successCount} 项（${items.length} 页面 × ${languages.length} 语言）` });
+        setSelectedItems(new Set());
+        setPublishDialogOpen(false);
+      } else {
+        toast({ title: `发布完成，${failCount} 项失败`, variant: "destructive" });
+        // Keep dialog open to show report
+      }
     } catch (e) {
       console.error(e);
       toast({ title: "发布失败", variant: "destructive" });
@@ -255,6 +353,9 @@ export default function ContentBrowser() {
           <p className="text-sm text-muted-foreground mt-1">按 主题 → Hub → Spoke 层级查看并发布内容</p>
         </div>
         <div className="flex items-center gap-2">
+      <Button size="sm" variant="outline" onClick={handleSelectAll} className="gap-1.5">
+            {isAllSelected ? "取消全选" : "全选"}
+          </Button>
           {selectedItems.size > 0 && (
             <Button size="sm" onClick={() => setPublishDialogOpen(true)} className="gap-1.5">
               <Send className="h-3.5 w-3.5" />
@@ -415,10 +516,11 @@ export default function ContentBrowser() {
 
       <PublishDialog
         open={publishDialogOpen}
-        onOpenChange={setPublishDialogOpen}
+        onOpenChange={(open) => { setPublishDialogOpen(open); if (!open) setPublishReport(null); }}
         selectedCount={selectedItems.size}
         publishing={publishing}
         onPublish={handlePublish}
+        report={publishReport}
       />
     </div>
   );

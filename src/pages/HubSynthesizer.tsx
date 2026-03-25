@@ -28,6 +28,12 @@ export default function HubSynthesizer() {
   const [selectedSpokes, setSelectedSpokes] = useState<string[]>([]);
   const [context, setContext] = useState("");
   const [prompt, setPrompt] = useState("");
+  const [pendingSave, setPendingSave] = useState<{
+    generatedJson: any;
+    spokeContent: string;
+    promptUsed: string;
+  } | null>(null);
+  const [confirmed, setConfirmed] = useState(false);
 
   useEffect(() => {
     if (currentProject) {

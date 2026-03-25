@@ -47,6 +47,14 @@ export default function SpokeGenerator() {
   const [selectedDocs, setSelectedDocs] = useState<string[]>([]);
   const [loadingDocs, setLoadingDocs] = useState(false);
   const [batchProgress, setBatchProgress] = useState<{ total: number; done: number; results: { title: string; success: boolean }[] } | null>(null);
+  const [pendingSave, setPendingSave] = useState<{
+    generatedJson: any;
+    feishuContent: string;
+    promptUsed: string;
+    title: string;
+    firstDoc: FeishuDoc | undefined;
+  } | null>(null);
+  const [confirmed, setConfirmed] = useState(false);
 
   useEffect(() => {
     if (currentProject) {

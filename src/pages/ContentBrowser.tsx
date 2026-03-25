@@ -41,7 +41,7 @@ export default function ContentBrowser() {
   // Load saved prompt
   useEffect(() => {
     if (currentProject) {
-      loadPromptConfig(currentProject.id, "browser").then((saved) => {
+      loadPromptConfig(currentProject.id, "global").then((saved) => {
         if (saved) setPrompt(saved);
       });
     }

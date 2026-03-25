@@ -63,8 +63,6 @@ export default function SpokeGenerator() {
       loadPromptConfig(currentProject.id, "spoke").then((saved) => {
         if (saved) setPrompt(saved);
       });
-      // Load documents from DB
-      handleLoadDocuments();
     }
   }, [currentProject]);
 

@@ -13,7 +13,7 @@ import { CodeViewer } from "@/components/CodeViewer";
 import { ValidationBar } from "@/components/ValidationBar";
 import { useProject } from "@/contexts/ProjectContext";
 import { getThemes, getComponentSpecs, createSpoke, getDocuments, createDocument, updateDocument } from "@/lib/api";
-import { fetchFeishuDocs, fetchFeishuDocContent } from "@/lib/feishu";
+import { fetchFeishuDocs, fetchFeishuDocContent, extractAgent3Code } from "@/lib/feishu";
 import { generateJson, saveJsonRecord } from "@/lib/generate";
 import { loadPromptConfig, savePromptConfig } from "@/lib/promptConfig";
 import { toast } from "@/hooks/use-toast";

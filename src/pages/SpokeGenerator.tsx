@@ -236,6 +236,11 @@ export default function SpokeGenerator() {
           context: scrapedData || undefined,
         });
         const generatedJson = result.generated_json;
+        // 强制 hubSlug 与主题名称一致
+        const themeName = themes.find((t) => t.id === selectedTheme)?.name;
+        if (generatedJson && typeof generatedJson === "object" && themeName) {
+          (generatedJson as any).hubSlug = themeName;
+        }
         const title = generatedJson?.title || docTitle;
 
         await saveJsonRecord({

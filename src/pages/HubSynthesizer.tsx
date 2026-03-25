@@ -38,7 +38,7 @@ export default function HubSynthesizer() {
   const parsedOutput = useMemo(() => {
     try { return output ? JSON.parse(output) : null; } catch { return null; }
   }, [output]);
-
+  useEffect(() => {
     if (currentProject) {
       getThemes(currentProject.id).then(setThemes).catch(console.error);
       getComponentSpecs(currentProject.id).then(setSpecs).catch(console.error);

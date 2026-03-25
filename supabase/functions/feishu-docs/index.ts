@@ -116,11 +116,11 @@ Deno.serve(async (req) => {
       });
     }
 
-    if (action === 'extract_agent3_code') {
+    if (action === 'extract_first_code') {
       const docToken = url.searchParams.get('doc_token');
       if (!docToken) throw new Error('doc_token is required');
 
-      // Fetch all blocks
+      // Fetch all blocks with pagination
       let allBlocks: any[] = [];
       let pageToken = '';
       do {
@@ -141,46 +141,16 @@ Deno.serve(async (req) => {
         return elements.map((el: any) => el?.text_run?.content || '').join('');
       };
 
-      // Heading block types: 3=h1, 4=h2, 5=h3, 6=h4, 7=h5, 8=h6, 9=h7..
-      const headingTypes = [3, 4, 5, 6, 7, 8, 9];
-      const headingFields: Record<number, string> = { 3:'heading1', 4:'heading2', 5:'heading3', 6:'heading4', 7:'heading5', 8:'heading6', 9:'heading7' };
-
-      // Find Agent3 heading
-      let agent3Index = -1;
-      let agent3Level = -1;
-      for (let i = 0; i < allBlocks.length; i++) {
-        const b = allBlocks[i];
-        if (headingTypes.includes(b.block_type)) {
-          const field = headingFields[b.block_type];
-          const text = extractText(b[field]?.elements);
-          if (text.includes('Agent3')) {
-            agent3Index = i;
-            agent3Level = b.block_type;
-            break;
-          }
+      // Find the first code block (block_type=14)
+      let codeContent = '';
+      for (const b of allBlocks) {
+        if (b.block_type === 14) {
+          codeContent = extractText(b.code?.body?.elements);
+          if (codeContent) break;
         }
       }
 
-      if (agent3Index === -1) {
-        return new Response(JSON.stringify({ code: 0, data: { agent3_found: false, code_blocks: [] } }), {
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        });
-      }
-
-      // Collect code blocks (block_type=14) after Agent3 heading until next heading of same/higher level
-      const codeBlocks: string[] = [];
-      for (let i = agent3Index + 1; i < allBlocks.length; i++) {
-        const b = allBlocks[i];
-        if (headingTypes.includes(b.block_type) && b.block_type <= agent3Level) {
-          break; // next heading of same or higher level
-        }
-        if (b.block_type === 14) { // code block
-          const codeText = extractText(b.code?.body?.elements);
-          if (codeText) codeBlocks.push(codeText);
-        }
-      }
-
-      return new Response(JSON.stringify({ code: 0, data: { agent3_found: true, code_blocks: codeBlocks } }), {
+      return new Response(JSON.stringify({ code: 0, data: { found: !!codeContent, code_content: codeContent } }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }

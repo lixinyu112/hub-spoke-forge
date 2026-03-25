@@ -21,6 +21,12 @@ export async function createTheme(projectId: string, name: string, description?:
   return data;
 }
 
+export async function updateTheme(id: string, updates: { name?: string; description?: string; feishu_doc_token?: string }) {
+  const { data, error } = await supabase.from("themes").update(updates).eq("id", id).select().single();
+  if (error) throw error;
+  return data;
+}
+
 // Hubs
 export async function getHubs(themeId: string) {
   const { data, error } = await supabase.from("hubs").select("*").eq("theme_id", themeId).order("created_at");

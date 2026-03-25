@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { Plus, Send, Filter } from "lucide-react";
+import { Plus, Send, Filter, Pencil } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -9,7 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Layers } from "lucide-react";
 import { useProject } from "@/contexts/ProjectContext";
-import { getProjectTree, createTheme, createPublicationsBatch } from "@/lib/api";
+import { getProjectTree, createTheme, updateTheme, createPublicationsBatch } from "@/lib/api";
 import { toast } from "@/hooks/use-toast";
 import { ContentTree, type TreeTheme } from "@/components/ContentTree";
 import { PublishDialog } from "@/components/PublishDialog";
@@ -37,6 +37,11 @@ export default function ContentBrowser() {
   const [newThemeFeishuToken, setNewThemeFeishuToken] = useState("");
   const [themeNameError, setThemeNameError] = useState("");
   const [prompt, setPrompt] = useState("");
+  const [editThemeDialogOpen, setEditThemeDialogOpen] = useState(false);
+  const [editThemeName, setEditThemeName] = useState("");
+  const [editThemeDesc, setEditThemeDesc] = useState("");
+  const [editThemeFeishuToken, setEditThemeFeishuToken] = useState("");
+  const [editThemeNameError, setEditThemeNameError] = useState("");
 
   // Load saved prompt
   useEffect(() => {
@@ -200,6 +205,45 @@ export default function ContentBrowser() {
     }
   };
 
+  const openEditThemeDialog = () => {
+    if (!selectedNode || selectedNode.type !== "theme") return;
+    const t = selectedNode.data;
+    setEditThemeName(t.name || "");
+    setEditThemeDesc(t.description || "");
+    setEditThemeFeishuToken(t.feishu_doc_token || "");
+    setEditThemeNameError("");
+    setEditThemeDialogOpen(true);
+  };
+
+  const handleEditThemeNameChange = (val: string) => {
+    setEditThemeName(val);
+    if (val && !THEME_NAME_REGEX.test(val)) {
+      setEditThemeNameError("仅允许英文小写字母、数字与中划线（-），且以字母或数字开头");
+    } else {
+      setEditThemeNameError("");
+    }
+  };
+
+  const handleUpdateTheme = async () => {
+    if (!selectedNode || selectedNode.type !== "theme") return;
+    if (!editThemeName.trim() || editThemeNameError) return;
+    try {
+      await updateTheme(selectedNode.data.id, {
+        name: editThemeName.trim(),
+        description: editThemeDesc.trim() || undefined,
+        feishu_doc_token: editThemeFeishuToken.trim() || undefined,
+      });
+      setEditThemeDialogOpen(false);
+      toast({ title: "主题已更新" });
+      await loadTree();
+      // Update selectedNode with new data
+      setSelectedNode({ type: "theme", data: { ...selectedNode.data, name: editThemeName.trim(), description: editThemeDesc.trim(), feishu_doc_token: editThemeFeishuToken.trim() } });
+    } catch (e) {
+      console.error(e);
+      toast({ title: "更新失败", variant: "destructive" });
+    }
+  };
+
   return (
     <div className="p-6 h-full flex flex-col gap-4">
       <div className="flex items-center justify-between">
@@ -292,8 +336,16 @@ export default function ContentBrowser() {
                   </div>
                 ) : selectedNode.type === "theme" ? (
                   <div className="space-y-3 p-4">
+                    <div className="flex items-center justify-between">
+                      <p className="text-xs text-muted-foreground">主题信息</p>
+                      <Button size="sm" variant="outline" className="gap-1.5 text-xs" onClick={openEditThemeDialog}>
+                        <Pencil className="h-3 w-3" />
+                        修改
+                      </Button>
+                    </div>
                     <div><p className="text-xs text-muted-foreground">名称</p><p className="text-sm font-medium">{selectedNode.data.name}</p></div>
-                    {selectedNode.data.description && <div><p className="text-xs text-muted-foreground">描述</p><p className="text-sm">{selectedNode.data.description}</p></div>}
+                    <div><p className="text-xs text-muted-foreground">飞书文档 ID</p><p className="text-sm font-mono">{selectedNode.data.feishu_doc_token || "—"}</p></div>
+                    <div><p className="text-xs text-muted-foreground">描述</p><p className="text-sm">{selectedNode.data.description || "—"}</p></div>
                     <div>
                       <p className="text-xs text-muted-foreground">统计</p>
                       <p className="text-sm">{selectedNode.data.hubs?.length || 0} 个 Hub，{(selectedNode.data.hubs?.reduce((a: number, h: any) => a + h.spokes.length, 0) || 0) + (selectedNode.data.unlinkedSpokes?.length || 0)} 个 Spoke</p>
@@ -336,7 +388,31 @@ export default function ContentBrowser() {
         </DialogContent>
       </Dialog>
 
-      {/* Publish Dialog */}
+      {/* Edit Theme Dialog */}
+      <Dialog open={editThemeDialogOpen} onOpenChange={setEditThemeDialogOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader><DialogTitle>修改主题</DialogTitle></DialogHeader>
+          <div className="space-y-3">
+            <div>
+              <Input
+                placeholder="主题名称（英文小写字母、数字与中划线）"
+                value={editThemeName}
+                onChange={(e) => handleEditThemeNameChange(e.target.value)}
+                className={editThemeNameError ? "border-destructive" : ""}
+              />
+              {editThemeNameError && <p className="text-xs text-destructive mt-1">{editThemeNameError}</p>}
+              <p className="text-xs text-muted-foreground mt-1">例如：digital-marketing、seo-guide2</p>
+            </div>
+            <Input placeholder="飞书文档 ID（可选）" value={editThemeFeishuToken} onChange={(e) => setEditThemeFeishuToken(e.target.value)} />
+            <Input placeholder="描述（可选）" value={editThemeDesc} onChange={(e) => setEditThemeDesc(e.target.value)} />
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEditThemeDialogOpen(false)}>取消</Button>
+            <Button onClick={handleUpdateTheme} disabled={!editThemeName.trim() || !!editThemeNameError}>保存</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       <PublishDialog
         open={publishDialogOpen}
         onOpenChange={setPublishDialogOpen}

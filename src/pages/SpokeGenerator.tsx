@@ -106,52 +106,51 @@ export default function SpokeGenerator() {
     }
   };
 
-  const handleLoadFeishuDocs = async () => {
-    setLoadingDocs(true);
-    try {
-      const res = await fetchFeishuDocs(feishuSearch || undefined);
-      if (res?.data?.files) {
-        setFeishuDocs(res.data.files.map((f: any) => ({ token: f.token, name: f.name, type: f.type, url: f.url })));
-      } else if (res?.data?.docs_entities) {
-        setFeishuDocs(res.data.docs_entities.map((d: any) => ({ token: d.docs_token, name: d.title, type: d.docs_type, url: d.url })));
-      }
-    } catch (e) {
-      console.error("Failed to load feishu docs:", e);
-      toast({ title: "飞书文档加载失败", description: "请检查飞书应用权限配置。", variant: "destructive" });
-    } finally {
-      setLoadingDocs(false);
-    }
-  };
-
   const toggleDoc = (token: string) => {
     setSelectedDocs((prev) => prev.includes(token) ? prev.filter((t) => t !== token) : [...prev, token]);
   };
 
-  const handleCreateDoc = (data: { token: string; name: string; content: string }) => {
+  const handleCreateDoc = async (data: { token: string; name: string; content: string }) => {
     if (!data.name || !data.token) {
       toast({ title: "请填写文档名称和文档 ID", variant: "destructive" });
       return;
     }
-    setFeishuDocs((prev) => {
-      if (prev.some((d) => d.token === data.token)) {
-        toast({ title: "文档 ID 已存在", variant: "destructive" });
-        return prev;
-      }
-      return [{ token: data.token, name: data.name, type: "manual", manualContent: data.content || undefined }, ...prev];
-    });
-    setSelectedDocs((prev) => [...prev, data.token]);
-    toast({ title: "文档已创建并选中" });
+    if (!currentProject) return;
+    if (feishuDocs.some((d) => d.token === data.token)) {
+      toast({ title: "文档 ID 已存在", variant: "destructive" });
+      return;
+    }
+    try {
+      await createDocument({
+        project_id: currentProject.id,
+        token: data.token,
+        name: data.name,
+        type: "manual",
+        content: data.content || undefined,
+      });
+      setFeishuDocs((prev) => [{ token: data.token, name: data.name, type: "manual", manualContent: data.content || undefined }, ...prev]);
+      setSelectedDocs((prev) => [...prev, data.token]);
+      toast({ title: "文档已创建并选中" });
+    } catch (e: any) {
+      toast({ title: "创建文档失败", description: e.message, variant: "destructive" });
+    }
   };
 
-  const handleEditDoc = (data: { token: string; name: string; content: string }) => {
-    setFeishuDocs((prev) =>
-      prev.map((d) =>
-        d.token === data.token
-          ? { ...d, name: data.name, manualContent: data.content || undefined }
-          : d
-      )
-    );
-    toast({ title: "文档已更新" });
+  const handleEditDoc = async (data: { token: string; name: string; content: string }) => {
+    if (!currentProject) return;
+    try {
+      await updateDocument(currentProject.id, data.token, { name: data.name, content: data.content || undefined });
+      setFeishuDocs((prev) =>
+        prev.map((d) =>
+          d.token === data.token
+            ? { ...d, name: data.name, manualContent: data.content || undefined }
+            : d
+        )
+      );
+      toast({ title: "文档已更新" });
+    } catch (e: any) {
+      toast({ title: "更新文档失败", description: e.message, variant: "destructive" });
+    }
   };
 
   const handleGenerateSingle = async () => {

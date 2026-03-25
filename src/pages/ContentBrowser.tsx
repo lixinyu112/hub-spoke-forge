@@ -388,7 +388,31 @@ export default function ContentBrowser() {
         </DialogContent>
       </Dialog>
 
-      {/* Publish Dialog */}
+      {/* Edit Theme Dialog */}
+      <Dialog open={editThemeDialogOpen} onOpenChange={setEditThemeDialogOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader><DialogTitle>修改主题</DialogTitle></DialogHeader>
+          <div className="space-y-3">
+            <div>
+              <Input
+                placeholder="主题名称（英文小写字母、数字与中划线）"
+                value={editThemeName}
+                onChange={(e) => handleEditThemeNameChange(e.target.value)}
+                className={editThemeNameError ? "border-destructive" : ""}
+              />
+              {editThemeNameError && <p className="text-xs text-destructive mt-1">{editThemeNameError}</p>}
+              <p className="text-xs text-muted-foreground mt-1">例如：digital-marketing、seo-guide2</p>
+            </div>
+            <Input placeholder="飞书文档 ID（可选）" value={editThemeFeishuToken} onChange={(e) => setEditThemeFeishuToken(e.target.value)} />
+            <Input placeholder="描述（可选）" value={editThemeDesc} onChange={(e) => setEditThemeDesc(e.target.value)} />
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEditThemeDialogOpen(false)}>取消</Button>
+            <Button onClick={handleUpdateTheme} disabled={!editThemeName.trim() || !!editThemeNameError}>保存</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       <PublishDialog
         open={publishDialogOpen}
         onOpenChange={setPublishDialogOpen}

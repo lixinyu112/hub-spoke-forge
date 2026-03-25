@@ -144,6 +144,33 @@ export type Database = {
         }
         Relationships: []
       }
+      prompt_configs: {
+        Row: {
+          created_at: string
+          id: string
+          page_type: string
+          project_id: string
+          prompt_content: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          page_type: string
+          project_id: string
+          prompt_content?: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          page_type?: string
+          project_id?: string
+          prompt_content?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       publications: {
         Row: {
           created_at: string

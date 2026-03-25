@@ -14,6 +14,7 @@ import { generateJson, saveJsonRecord } from "@/lib/generate";
 import { toast } from "@/hooks/use-toast";
 import type { Theme, Spoke, ComponentSpec } from "@/lib/api";
 import { PromptConfigButton } from "@/components/PromptConfigButton";
+import { loadPromptConfig, savePromptConfig } from "@/lib/promptConfig";
 
 export default function HubSynthesizer() {
   const { currentProject } = useProject();
@@ -32,8 +33,19 @@ export default function HubSynthesizer() {
     if (currentProject) {
       getThemes(currentProject.id).then(setThemes).catch(console.error);
       getComponentSpecs(currentProject.id).then(setSpecs).catch(console.error);
+      loadPromptConfig(currentProject.id, "hub").then((saved) => {
+        if (saved) setPrompt(saved);
+      });
     }
   }, [currentProject]);
+
+  useEffect(() => {
+    if (!currentProject || !prompt) return;
+    const timer = setTimeout(() => {
+      savePromptConfig(currentProject.id, "hub", prompt);
+    }, 1000);
+    return () => clearTimeout(timer);
+  }, [prompt, currentProject]);
 
   useEffect(() => {
     if (selectedTheme) {

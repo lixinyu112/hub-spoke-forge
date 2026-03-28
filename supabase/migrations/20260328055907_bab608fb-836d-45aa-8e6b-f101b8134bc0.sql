@@ -1,0 +1,1 @@
+ALTER TABLE component_specs ADD COLUMN theme_id uuid REFERENCES themes(id) ON DELETE CASCADE;

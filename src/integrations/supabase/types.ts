@@ -21,6 +21,7 @@ export type Database = {
           json_schema: Json | null
           name: string
           project_id: string
+          theme_id: string | null
           type: string
           updated_at: string
         }
@@ -30,6 +31,7 @@ export type Database = {
           json_schema?: Json | null
           name: string
           project_id: string
+          theme_id?: string | null
           type: string
           updated_at?: string
         }
@@ -39,6 +41,7 @@ export type Database = {
           json_schema?: Json | null
           name?: string
           project_id?: string
+          theme_id?: string | null
           type?: string
           updated_at?: string
         }
@@ -48,6 +51,13 @@ export type Database = {
             columns: ["project_id"]
             isOneToOne: false
             referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "component_specs_theme_id_fkey"
+            columns: ["theme_id"]
+            isOneToOne: false
+            referencedRelation: "themes"
             referencedColumns: ["id"]
           },
         ]

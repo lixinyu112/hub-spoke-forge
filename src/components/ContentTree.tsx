@@ -1,6 +1,7 @@
 import { ChevronRight, ChevronDown, Network, FileJson, Layers, FolderOpen } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 
 export interface TreeSpoke {
   id: string;
@@ -9,6 +10,7 @@ export interface TreeSpoke {
   status: string;
   json_data: any;
   feishu_doc_title: string | null;
+  published_at?: string | null;
 }
 
 export interface TreeHub {
@@ -18,6 +20,7 @@ export interface TreeHub {
   status: string;
   json_data: any;
   spokes: TreeSpoke[];
+  published_at?: string | null;
 }
 
 export interface TreeTheme {
@@ -38,6 +41,15 @@ interface ContentTreeProps {
   onToggleHub: (id: string) => void;
   onSelectNode: (node: { type: "theme" | "hub" | "spoke"; data: any }) => void;
   onToggleItem: (id: string, type: "hub" | "spoke") => void;
+}
+
+function formatDate(dateStr: string) {
+  return new Date(dateStr).toLocaleDateString("zh-CN", {
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
 }
 
 export function ContentTree({
@@ -87,6 +99,14 @@ export function ContentTree({
                       {expandedHubs.has(hub.id) ? <ChevronDown className="h-3 w-3 text-muted-foreground" /> : <ChevronRight className="h-3 w-3 text-muted-foreground" />}
                       <Network className="h-3.5 w-3.5 text-orange-500" />
                       <span className="truncate">{hub.title}</span>
+                      {hub.published_at && (
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <span className="text-[10px] text-muted-foreground shrink-0">📤 {formatDate(hub.published_at)}</span>
+                          </TooltipTrigger>
+                          <TooltipContent>发布于 {new Date(hub.published_at).toLocaleString("zh-CN")}</TooltipContent>
+                        </Tooltip>
+                      )}
                       <Badge variant="outline" className="text-[10px] ml-auto shrink-0">{hub.spokes.length}S</Badge>
                     </button>
                   </div>
@@ -105,6 +125,14 @@ export function ContentTree({
                           >
                             <FileJson className="h-3 w-3 text-primary" />
                             <span className="truncate">{spoke.title}</span>
+                            {spoke.published_at && (
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <span className="text-[10px] text-muted-foreground shrink-0 ml-auto">📤 {formatDate(spoke.published_at)}</span>
+                                </TooltipTrigger>
+                                <TooltipContent>发布于 {new Date(spoke.published_at).toLocaleString("zh-CN")}</TooltipContent>
+                              </Tooltip>
+                            )}
                           </button>
                         </div>
                       ))}
@@ -113,9 +141,9 @@ export function ContentTree({
                 </div>
               ))}
 
-              {theme.unlinkedSpokes.length > 0 && (
-                <div>
-                  <div className="px-2 py-1 text-[10px] text-muted-foreground font-mono uppercase tracking-wider">未关联 Hub</div>
+              {/* Spokes shown directly under theme when no hub exists */}
+              {theme.hubs.length === 0 && theme.unlinkedSpokes.length > 0 && (
+                <div className="space-y-0.5">
                   {theme.unlinkedSpokes.map((spoke) => (
                     <div key={spoke.id} className="flex items-center gap-1 ml-2">
                       <Checkbox
@@ -129,6 +157,9 @@ export function ContentTree({
                       >
                         <FileJson className="h-3 w-3 text-muted-foreground" />
                         <span className="truncate">{spoke.title}</span>
+                        {spoke.published_at && (
+                          <span className="text-[10px] text-muted-foreground shrink-0 ml-auto">📤 {formatDate(spoke.published_at)}</span>
+                        )}
                       </button>
                     </div>
                   ))}

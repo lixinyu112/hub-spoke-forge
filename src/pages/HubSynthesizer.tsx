@@ -2,14 +2,14 @@ import { useState, useEffect, useMemo } from "react";
 import { Network, ChevronRight, FileJson, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { CodeViewer } from "@/components/CodeViewer";
 import { ValidationBar } from "@/components/ValidationBar";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Badge } from "@/components/ui/badge";
 import { useProject } from "@/contexts/ProjectContext";
-import { getThemes, getSpokes, getComponentSpecs, createHub, updateHub, findHubByTheme } from "@/lib/api";
+import { getThemes, getSpokes, getComponentSpecs, getComponentSpecsByTheme, createHub, updateHub, findHubByTheme } from "@/lib/api";
 import { generateJson, saveJsonRecord } from "@/lib/generate";
 import { toast } from "@/hooks/use-toast";
 import type { Theme, Spoke, ComponentSpec } from "@/lib/api";
@@ -25,9 +25,9 @@ export default function HubSynthesizer() {
   const [specs, setSpecs] = useState<ComponentSpec[]>([]);
   const [selectedTheme, setSelectedTheme] = useState("");
   const [spokes, setSpokes] = useState<Spoke[]>([]);
-  const [selectedSpokes, setSelectedSpokes] = useState<string[]>([]);
   const [context, setContext] = useState("");
   const [prompt, setPrompt] = useState("");
+  const [selectedSpec, setSelectedSpec] = useState("hub-default");
   const [pendingSave, setPendingSave] = useState<{
     generatedJson: any;
     spokeContent: string;
@@ -38,6 +38,7 @@ export default function HubSynthesizer() {
   const parsedOutput = useMemo(() => {
     try { return output ? JSON.parse(output) : null; } catch { return null; }
   }, [output]);
+
   useEffect(() => {
     if (currentProject) {
       getThemes(currentProject.id).then(setThemes).catch(console.error);
@@ -52,16 +53,19 @@ export default function HubSynthesizer() {
     if (currentProject) savePromptConfig(currentProject.id, "hub", val);
   };
 
+  // Load all spokes when theme changes + auto-load component spec
   useEffect(() => {
     if (selectedTheme) {
       getSpokes(selectedTheme).then(setSpokes).catch(console.error);
-      setSelectedSpokes([]);
+      // Auto-load component spec for this theme
+      if (currentProject) {
+        getComponentSpecsByTheme(currentProject.id, selectedTheme).then((themeSpecs: any[]) => {
+          const hubSpec = themeSpecs.find((s: any) => s.type === "hub");
+          setSelectedSpec(hubSpec ? hubSpec.id : "hub-default");
+        }).catch(() => setSelectedSpec("hub-default"));
+      }
     }
-  }, [selectedTheme]);
-
-  const toggleSpoke = (id: string) => {
-    setSelectedSpokes((prev) => prev.includes(id) ? prev.filter((s) => s !== id) : [...prev, id]);
-  };
+  }, [selectedTheme, currentProject]);
 
   const handleGenerate = async () => {
     if (!selectedTheme) {
@@ -73,11 +77,9 @@ export default function HubSynthesizer() {
     setValidation("idle");
 
     try {
-      const selectedSpokeData = spokes.filter((s) => selectedSpokes.includes(s.id));
-      
-      // 构建 Spoke 数据作为飞书内容输入
+      // 使用该主题下所有 Spoke 数据
       const spokeContent = JSON.stringify(
-        selectedSpokeData.map((s) => ({
+        spokes.map((s) => ({
           title: s.title,
           slug: s.slug,
           json_data: s.json_data,
@@ -86,7 +88,6 @@ export default function HubSynthesizer() {
         2
       );
 
-      // 调用 AI 生成 Hub JSON
       const result = await generateJson({
         type: "hub",
         feishu_content: spokeContent,
@@ -127,7 +128,6 @@ export default function HubSynthesizer() {
         generated_json: editedJson,
       });
 
-      // 检查当前主题下是否已存在 Hub，存在则更新，否则新建
       const existingHub = await findHubByTheme(selectedTheme);
       const hubPayload = {
         title: editedJson?.title || themes.find((t) => t.id === selectedTheme)?.name + " — Hub",
@@ -160,7 +160,6 @@ export default function HubSynthesizer() {
     toast({ title: "已放弃生成结果" });
   };
 
-
   const hubSpecs = specs.filter((s) => s.type === "hub");
 
   return (
@@ -170,7 +169,7 @@ export default function HubSynthesizer() {
           <h1 className="text-2xl font-semibold tracking-tight">Hub 合成器</h1>
           <PromptConfigButton value={prompt} onChange={setPrompt} onConfirm={handleSavePrompt} placeholder="输入 Hub 合成的 system prompt…" />
         </div>
-        <p className="text-sm text-muted-foreground mt-1">将 Spoke 页面聚合为结构化的 Hub JSON</p>
+        <p className="text-sm text-muted-foreground mt-1">将 Spoke 页面聚合为结构化的 Hub JSON（默认引用主题下所有 Spoke 页面）</p>
       </div>
 
       <div className="flex-1 grid lg:grid-cols-2 gap-4 min-h-0">
@@ -190,31 +189,19 @@ export default function HubSynthesizer() {
                   ))}
                 </SelectContent>
               </Select>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader className="pb-3">
-              <CardTitle className="text-base">选择 Spoke 页面</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-2">
-              {spokes.length === 0 && (
-                <p className="text-xs text-muted-foreground py-4 text-center">
-                  {selectedTheme ? "该主题下暂无 Spoke 页面" : "请先选择主题"}
-                </p>
-              )}
-              {spokes.map((spoke) => (
-                <label key={spoke.id} className="flex items-center gap-3 p-2 rounded-md hover:bg-muted/50 cursor-pointer transition-colors">
-                  <Checkbox
-                    checked={selectedSpokes.includes(spoke.id)}
-                    onCheckedChange={() => toggleSpoke(spoke.id)}
-                  />
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium truncate">{spoke.title}</p>
-                    <p className="text-xs text-muted-foreground font-mono">{spoke.slug || spoke.feishu_doc_token || "—"}</p>
+              {selectedTheme && spokes.length > 0 && (
+                <div className="mt-3 space-y-1">
+                  <p className="text-xs text-muted-foreground">已引用 Spoke 页面（{spokes.length} 个）：</p>
+                  <div className="flex flex-wrap gap-1">
+                    {spokes.map((s) => (
+                      <Badge key={s.id} variant="outline" className="text-[10px]">{s.title}</Badge>
+                    ))}
                   </div>
-                </label>
-              ))}
+                </div>
+              )}
+              {selectedTheme && spokes.length === 0 && (
+                <p className="text-xs text-muted-foreground mt-2">该主题下暂无 Spoke 页面</p>
+              )}
             </CardContent>
           </Card>
 
@@ -237,7 +224,7 @@ export default function HubSynthesizer() {
               <CardTitle className="text-base">Hub 组件规范</CardTitle>
             </CardHeader>
             <CardContent className="space-y-3">
-              <Select defaultValue="hub-default">
+              <Select value={selectedSpec} onValueChange={setSelectedSpec}>
                 <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>

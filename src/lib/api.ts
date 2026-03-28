@@ -117,19 +117,91 @@ export async function createComponentSpec(spec: TablesInsert<"component_specs">)
   return data;
 }
 
-// Full tree for a project
+export async function deleteComponentSpec(id: string) {
+  const { error } = await supabase.from("component_specs").delete().eq("id", id);
+  if (error) throw error;
+}
+
+// Component Specs with theme support (uses REST API to bypass TypeScript type constraints)
+export async function getComponentSpecsByTheme(projectId: string, themeId: string) {
+  const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+  const anonKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
+  const res = await fetch(
+    `${supabaseUrl}/rest/v1/component_specs?project_id=eq.${projectId}&theme_id=eq.${themeId}&order=created_at.asc`,
+    { headers: { apikey: anonKey, Authorization: `Bearer ${anonKey}` } }
+  );
+  if (!res.ok) throw new Error("Failed to load component specs");
+  return res.json();
+}
+
+export async function upsertComponentSpecByTheme(spec: {
+  project_id: string; theme_id: string; name: string; type: string; json_schema?: any;
+}) {
+  const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+  const anonKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
+  // Check existing
+  const checkRes = await fetch(
+    `${supabaseUrl}/rest/v1/component_specs?project_id=eq.${spec.project_id}&theme_id=eq.${spec.theme_id}&type=eq.${spec.type}&limit=1`,
+    { headers: { apikey: anonKey, Authorization: `Bearer ${anonKey}` } }
+  );
+  const existing = await checkRes.json();
+  if (existing.length > 0) {
+    const res = await fetch(`${supabaseUrl}/rest/v1/component_specs?id=eq.${existing[0].id}`, {
+      method: "PATCH",
+      headers: { apikey: anonKey, Authorization: `Bearer ${anonKey}`, "Content-Type": "application/json", Prefer: "return=representation" },
+      body: JSON.stringify({ json_schema: spec.json_schema, name: spec.name }),
+    });
+    if (!res.ok) throw new Error("Failed to update component spec");
+    return (await res.json())[0];
+  }
+  const res = await fetch(`${supabaseUrl}/rest/v1/component_specs`, {
+    method: "POST",
+    headers: { apikey: anonKey, Authorization: `Bearer ${anonKey}`, "Content-Type": "application/json", Prefer: "return=representation" },
+    body: JSON.stringify(spec),
+  });
+  if (!res.ok) throw new Error("Failed to create component spec");
+  return (await res.json())[0];
+}
+
+// Full tree for a project (with publish times, all spokes under single hub)
 export async function getProjectTree(projectId: string) {
   const themes = await getThemes(projectId);
+
+  // Get latest publication dates
+  const { data: pubs } = await supabase
+    .from("publications")
+    .select("source_id, published_at")
+    .eq("project_id", projectId)
+    .order("published_at", { ascending: false });
+
+  const pubMap = new Map<string, string>();
+  for (const p of (pubs || [])) {
+    if (!pubMap.has(p.source_id)) pubMap.set(p.source_id, p.published_at);
+  }
+
   const tree = await Promise.all(
     themes.map(async (theme) => {
       const hubs = await getHubs(theme.id);
       const spokes = await getSpokes(theme.id);
-      const hubsWithSpokes = hubs.map((hub) => ({
-        ...hub,
-        spokes: spokes.filter((s) => s.hub_id === hub.id),
+
+      const allSpokesWithPub = spokes.map((s) => ({
+        ...s,
+        published_at: pubMap.get(s.id) || null,
       }));
-      const unlinkedSpokes = spokes.filter((s) => !s.hub_id);
-      return { ...theme, hubs: hubsWithSpokes, unlinkedSpokes };
+
+      // Single hub per theme, all spokes go under hub
+      const hub = hubs.length > 0 ? hubs[0] : null;
+      return {
+        ...theme,
+        hubs: hub
+          ? [{
+              ...hub,
+              published_at: pubMap.get(hub.id) || null,
+              spokes: allSpokesWithPub,
+            }]
+          : [],
+        unlinkedSpokes: hub ? [] : allSpokesWithPub,
+      };
     })
   );
   return tree;

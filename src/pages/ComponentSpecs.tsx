@@ -1,13 +1,14 @@
 import { useState, useEffect } from "react";
-import { Upload, FileText, Save } from "lucide-react";
+import { Upload, FileText, Save, X, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "@/hooks/use-toast";
 import { Badge } from "@/components/ui/badge";
 import { useProject } from "@/contexts/ProjectContext";
-import { getComponentSpecs, createComponentSpec } from "@/lib/api";
-import type { ComponentSpec } from "@/lib/api";
+import { getThemes, getComponentSpecs, getComponentSpecsByTheme, upsertComponentSpecByTheme, deleteComponentSpec } from "@/lib/api";
+import type { ComponentSpec, Theme } from "@/lib/api";
 
 const SAMPLE_HUB_JSON = `{
   "type": "hub",
@@ -34,12 +35,38 @@ export default function ComponentSpecs() {
   const [spokeJson, setSpokeJson] = useState(SAMPLE_SPOKE_JSON);
   const [dragOver, setDragOver] = useState(false);
   const [savedSpecs, setSavedSpecs] = useState<ComponentSpec[]>([]);
+  const [themes, setThemes] = useState<Theme[]>([]);
+  const [selectedTheme, setSelectedTheme] = useState("");
 
   useEffect(() => {
     if (currentProject) {
+      getThemes(currentProject.id).then(setThemes).catch(console.error);
       getComponentSpecs(currentProject.id).then(setSavedSpecs).catch(console.error);
     }
   }, [currentProject]);
+
+  // Load specs when theme changes
+  useEffect(() => {
+    if (currentProject && selectedTheme) {
+      getComponentSpecsByTheme(currentProject.id, selectedTheme).then((specs: any[]) => {
+        const hubSpec = specs.find((s: any) => s.type === "hub");
+        const spokeSpec = specs.find((s: any) => s.type === "spoke");
+        if (hubSpec?.json_schema) {
+          setHubJson(typeof hubSpec.json_schema === "string" ? hubSpec.json_schema : JSON.stringify(hubSpec.json_schema, null, 2));
+        } else {
+          setHubJson(SAMPLE_HUB_JSON);
+        }
+        if (spokeSpec?.json_schema) {
+          setSpokeJson(typeof spokeSpec.json_schema === "string" ? spokeSpec.json_schema : JSON.stringify(spokeSpec.json_schema, null, 2));
+        } else {
+          setSpokeJson(SAMPLE_SPOKE_JSON);
+        }
+      }).catch(console.error);
+    } else {
+      setHubJson(SAMPLE_HUB_JSON);
+      setSpokeJson(SAMPLE_SPOKE_JSON);
+    }
+  }, [selectedTheme, currentProject]);
 
   const handleDrop = (e: React.DragEvent) => {
     e.preventDefault();
@@ -49,9 +76,29 @@ export default function ComponentSpecs() {
     toast({ title: "文件已上传", description: `已添加 ${newFiles.length} 个文件` });
   };
 
+  const handleRemoveFile = (index: number) => {
+    setFiles((prev) => prev.filter((_, i) => i !== index));
+    toast({ title: "文件已移除" });
+  };
+
+  const handleDeleteSpec = async (id: string) => {
+    try {
+      await deleteComponentSpec(id);
+      setSavedSpecs((prev) => prev.filter((s) => s.id !== id));
+      toast({ title: "规范已删除" });
+    } catch (e) {
+      console.error(e);
+      toast({ title: "删除失败", variant: "destructive" });
+    }
+  };
+
   const handleSave = async () => {
     if (!currentProject) {
       toast({ title: "请先选择项目", variant: "destructive" });
+      return;
+    }
+    if (!selectedTheme) {
+      toast({ title: "请先选择主题", variant: "destructive" });
       return;
     }
     try {
@@ -59,9 +106,22 @@ export default function ComponentSpecs() {
       try { hubParsed = JSON.parse(hubJson); } catch { hubParsed = hubJson; }
       try { spokeParsed = JSON.parse(spokeJson); } catch { spokeParsed = spokeJson; }
 
-      await createComponentSpec({ project_id: currentProject.id, name: "Hub Schema", type: "hub", json_schema: hubParsed });
-      await createComponentSpec({ project_id: currentProject.id, name: "Spoke Schema", type: "spoke", json_schema: spokeParsed });
-      toast({ title: "规范已保存", description: "组件规范更新成功。" });
+      const themeName = themes.find((t) => t.id === selectedTheme)?.name || "未知主题";
+      await upsertComponentSpecByTheme({
+        project_id: currentProject.id,
+        theme_id: selectedTheme,
+        name: `${themeName} - Hub Schema`,
+        type: "hub",
+        json_schema: hubParsed,
+      });
+      await upsertComponentSpecByTheme({
+        project_id: currentProject.id,
+        theme_id: selectedTheme,
+        name: `${themeName} - Spoke Schema`,
+        type: "spoke",
+        json_schema: spokeParsed,
+      });
+      toast({ title: "规范已保存", description: `已为主题「${themeName}」保存组件规范。` });
       getComponentSpecs(currentProject.id).then(setSavedSpecs);
     } catch (e) {
       console.error(e);
@@ -74,10 +134,33 @@ export default function ComponentSpecs() {
       <div>
         <h1 className="text-2xl font-semibold tracking-tight">组件规范</h1>
         <p className="text-sm text-muted-foreground mt-1">
-          上传约束文档并定义 Hub 和 Spoke 组件的 JSON 模式。
+          管理约束文档并定义各主题下 Hub 和 Spoke 组件的 JSON 模式。
           {currentProject && <span className="text-primary ml-1">当前项目: {currentProject.name}</span>}
         </p>
       </div>
+
+      {/* Theme selector */}
+      <Card>
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base">选择主题</CardTitle>
+          <CardDescription>不同主题可配置不同的初始 JSON 模板</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <Select value={selectedTheme} onValueChange={setSelectedTheme}>
+            <SelectTrigger>
+              <SelectValue placeholder="选择主题…" />
+            </SelectTrigger>
+            <SelectContent>
+              {themes.map((t) => (
+                <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>
+              ))}
+              {themes.length === 0 && (
+                <div className="px-2 py-1.5 text-xs text-muted-foreground">暂无主题，请先在「内容浏览」中创建</div>
+              )}
+            </SelectContent>
+          </Select>
+        </CardContent>
+      </Card>
 
       {savedSpecs.length > 0 && (
         <Card>
@@ -87,8 +170,15 @@ export default function ComponentSpecs() {
           <CardContent>
             <div className="flex flex-wrap gap-2">
               {savedSpecs.map((s) => (
-                <Badge key={s.id} variant="secondary" className="gap-1.5 text-xs">
+                <Badge key={s.id} variant="secondary" className="gap-1.5 text-xs group">
                   {s.type === "hub" ? "🔗" : "📄"} {s.name}
+                  <button
+                    onClick={() => handleDeleteSpec(s.id)}
+                    className="ml-1 opacity-0 group-hover:opacity-100 transition-opacity"
+                    title="删除规范"
+                  >
+                    <X className="h-3 w-3 text-destructive" />
+                  </button>
                 </Badge>
               ))}
             </div>
@@ -99,7 +189,7 @@ export default function ComponentSpecs() {
       <Card>
         <CardHeader>
           <CardTitle className="text-base">约束文档</CardTitle>
-          <CardDescription>上传 PDF 或 Markdown 规范文件</CardDescription>
+          <CardDescription>上传 PDF 或 Markdown 规范文件（通用文档管理入口）</CardDescription>
         </CardHeader>
         <CardContent>
           <div
@@ -121,9 +211,16 @@ export default function ComponentSpecs() {
           {files.length > 0 && (
             <div className="mt-4 flex flex-wrap gap-2">
               {files.map((f, i) => (
-                <Badge key={i} variant="secondary" className="gap-1.5 font-mono text-xs">
+                <Badge key={i} variant="secondary" className="gap-1.5 font-mono text-xs group">
                   <FileText className="h-3 w-3" />
                   {f}
+                  <button
+                    onClick={(e) => { e.stopPropagation(); handleRemoveFile(i); }}
+                    className="ml-1 opacity-0 group-hover:opacity-100 transition-opacity"
+                    title="移除文件"
+                  >
+                    <X className="h-3 w-3 text-destructive" />
+                  </button>
                 </Badge>
               ))}
             </div>
@@ -135,6 +232,7 @@ export default function ComponentSpecs() {
         <Card>
           <CardHeader>
             <CardTitle className="text-base">Hub JSON 示例</CardTitle>
+            <CardDescription>{selectedTheme ? `主题: ${themes.find(t => t.id === selectedTheme)?.name}` : "请先选择主题"}</CardDescription>
           </CardHeader>
           <CardContent>
             <Textarea value={hubJson} onChange={(e) => setHubJson(e.target.value)} className="font-mono text-xs min-h-[200px] bg-code text-code-foreground" />
@@ -143,6 +241,7 @@ export default function ComponentSpecs() {
         <Card>
           <CardHeader>
             <CardTitle className="text-base">Spoke JSON 示例</CardTitle>
+            <CardDescription>{selectedTheme ? `主题: ${themes.find(t => t.id === selectedTheme)?.name}` : "请先选择主题"}</CardDescription>
           </CardHeader>
           <CardContent>
             <Textarea value={spokeJson} onChange={(e) => setSpokeJson(e.target.value)} className="font-mono text-xs min-h-[200px] bg-code text-code-foreground" />
@@ -150,7 +249,7 @@ export default function ComponentSpecs() {
         </Card>
       </div>
 
-      <Button onClick={handleSave} className="gap-2">
+      <Button onClick={handleSave} className="gap-2" disabled={!selectedTheme}>
         <Save className="h-4 w-4" />
         保存规范
       </Button>

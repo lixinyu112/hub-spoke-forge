@@ -1,9 +1,8 @@
-import { useState, useEffect } from "react";
-import { Sparkles, FileText, Search, Loader2, Pencil, RefreshCw } from "lucide-react";
+import { useState, useEffect, useRef } from "react";
+import { Sparkles, FileText, Search, Loader2, Pencil, RefreshCw, Upload } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -12,7 +11,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { CodeViewer } from "@/components/CodeViewer";
 import { ValidationBar } from "@/components/ValidationBar";
 import { useProject } from "@/contexts/ProjectContext";
-import { getThemes, getComponentSpecs, createSpoke, updateSpoke, upsertSpoke, getDocuments, createDocument, updateDocument } from "@/lib/api";
+import { getThemes, getComponentSpecs, getComponentSpecsByTheme, createSpoke, updateSpoke, upsertSpoke, getDocuments, createDocument, updateDocument } from "@/lib/api";
 import { fetchFeishuDocs, fetchFeishuDocContent, extractFirstCode } from "@/lib/feishu";
 import { generateJson, saveJsonRecord } from "@/lib/generate";
 import { loadPromptConfig, savePromptConfig } from "@/lib/promptConfig";
@@ -27,8 +26,20 @@ interface FeishuDoc {
   type: string;
   url?: string;
   manualContent?: string;
-  modifiedTime?: string; // 飞书文档最后修改时间
-  lastGeneratedAt?: string; // JSON 最后生成时间
+  modifiedTime?: string;
+  lastGeneratedAt?: string;
+}
+
+interface BatchResult {
+  doc: FeishuDoc;
+  generatedJson: any;
+  code: string;
+  feishuContent: string;
+  promptUsed: string;
+  title: string;
+  confirmed: boolean;
+  discarded: boolean;
+  error?: string;
 }
 
 export default function SpokeGenerator() {
@@ -42,13 +53,17 @@ export default function SpokeGenerator() {
   const [selectedTheme, setSelectedTheme] = useState("");
   const [scrapedData, setScrapedData] = useState("");
   const [prompt, setPrompt] = useState("");
+  const [selectedSpec, setSelectedSpec] = useState("spoke-default");
 
   // Feishu docs
   const [feishuDocs, setFeishuDocs] = useState<FeishuDoc[]>([]);
   const [feishuSearch, setFeishuSearch] = useState("");
   const [selectedDocs, setSelectedDocs] = useState<string[]>([]);
   const [loadingDocs, setLoadingDocs] = useState(false);
-  const [batchProgress, setBatchProgress] = useState<{ total: number; done: number; results: { title: string; success: boolean }[] } | null>(null);
+  const [syncing, setSyncing] = useState(false);
+  const [syncingDoc, setSyncingDoc] = useState<string | null>(null);
+
+  // Single mode state
   const [pendingSave, setPendingSave] = useState<{
     generatedJson: any;
     feishuContent: string;
@@ -57,6 +72,14 @@ export default function SpokeGenerator() {
     firstDoc: FeishuDoc | undefined;
   } | null>(null);
   const [confirmed, setConfirmed] = useState(false);
+
+  // Batch mode state
+  const [batchResults, setBatchResults] = useState<BatchResult[]>([]);
+  const [activeBatchTab, setActiveBatchTab] = useState("0");
+  const [batchProgress, setBatchProgress] = useState<{ total: number; done: number } | null>(null);
+
+  // File upload ref
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (currentProject) {
@@ -73,15 +96,21 @@ export default function SpokeGenerator() {
       setFeishuDocs([]);
       setSelectedDocs([]);
       setMode("single");
+      setBatchResults([]);
       handleLoadDocuments();
+      // Auto-load component spec for this theme
+      if (currentProject) {
+        getComponentSpecsByTheme(currentProject.id, selectedTheme).then((themeSpecs: any[]) => {
+          const spokeSpec = themeSpecs.find((s: any) => s.type === "spoke");
+          setSelectedSpec(spokeSpec ? spokeSpec.id : "spoke-default");
+        }).catch(() => setSelectedSpec("spoke-default"));
+      }
     }
-  }, [selectedTheme])
+  }, [selectedTheme]);
 
   const handleSavePrompt = (val: string) => {
     if (currentProject) savePromptConfig(currentProject.id, "spoke", val);
   };
-
-  const [syncing, setSyncing] = useState(false);
 
   const handleLoadDocuments = async () => {
     if (!currentProject || !selectedTheme) return;
@@ -94,7 +123,6 @@ export default function SpokeGenerator() {
     }
     setLoadingDocs(true);
     try {
-      // 仅通过当前主题的 folder_token 查询飞书文件夹下的文档
       const res = await fetchFeishuDocs(feishuSearch || undefined, folderToken);
       let docs: FeishuDoc[] = [];
       if (res?.data?.files) {
@@ -109,7 +137,6 @@ export default function SpokeGenerator() {
         }));
       }
 
-      // 查询 spokes 表获取每个文档的 JSON 最后生成时间，同时补充 DB 中的 manualContent
       try {
         const [dbDocs, spokesRes] = await Promise.all([
           getDocuments(currentProject.id),
@@ -139,15 +166,21 @@ export default function SpokeGenerator() {
     }
   };
 
-  const handleSyncAgent3 = async () => {
+  // Batch content sync (all selected docs or all docs)
+  const handleSyncContent = async () => {
     if (!currentProject || feishuDocs.length === 0) return;
+    const docsToSync = selectedDocs.length > 0
+      ? feishuDocs.filter(d => selectedDocs.includes(d.token))
+      : feishuDocs;
+    if (docsToSync.length === 0) return;
+
     setSyncing(true);
     let syncCount = 0;
     let failCount = 0;
     const updated = [...feishuDocs];
 
-    for (let i = 0; i < updated.length; i++) {
-      const doc = updated[i];
+    for (const doc of docsToSync) {
+      const idx = updated.findIndex(d => d.token === doc.token);
       try {
         const result = await extractFirstCode(doc.token);
         const codeContent = result.found && result.code_content ? result.code_content : undefined;
@@ -155,19 +188,15 @@ export default function SpokeGenerator() {
         if (codeContent) {
           const dbDocs = await getDocuments(currentProject.id);
           const exists = dbDocs.some((d: any) => d.token === doc.token);
-
           if (exists) {
             await updateDocument(currentProject.id, doc.token, { name: doc.name, content: codeContent });
           } else {
             await createDocument({
-              project_id: currentProject.id,
-              token: doc.token,
-              name: doc.name,
-              type: doc.type || "docx",
-              content: codeContent,
+              project_id: currentProject.id, token: doc.token,
+              name: doc.name, type: doc.type || "docx", content: codeContent,
             });
           }
-          updated[i] = { ...doc, manualContent: codeContent };
+          if (idx >= 0) updated[idx] = { ...doc, manualContent: codeContent };
           syncCount++;
         }
       } catch (e) {
@@ -179,18 +208,61 @@ export default function SpokeGenerator() {
     setFeishuDocs(updated);
     setSyncing(false);
     if (syncCount > 0) {
-      toast({ title: `已同步 ${syncCount} 个文档的代码块${failCount > 0 ? `，${failCount} 个失败` : ""}` });
+      toast({ title: `已同步 ${syncCount} 个文档${failCount > 0 ? `，${failCount} 个失败` : ""}` });
     } else if (failCount > 0) {
-      toast({ title: `代码提取失败（${failCount} 个），请检查飞书应用权限`, variant: "destructive" });
+      toast({ title: `同步失败（${failCount} 个），请检查飞书应用权限`, variant: "destructive" });
     } else {
       toast({ title: "未找到包含代码块的文档" });
     }
   };
 
+  // Single doc sync
+  const handleSyncSingle = async (doc: FeishuDoc) => {
+    if (!currentProject) return;
+    setSyncingDoc(doc.token);
+    try {
+      const result = await extractFirstCode(doc.token);
+      const codeContent = result.found && result.code_content ? result.code_content : undefined;
+      if (codeContent) {
+        const dbDocs = await getDocuments(currentProject.id);
+        const exists = dbDocs.some((d: any) => d.token === doc.token);
+        if (exists) {
+          await updateDocument(currentProject.id, doc.token, { name: doc.name, content: codeContent });
+        } else {
+          await createDocument({
+            project_id: currentProject.id, token: doc.token,
+            name: doc.name, type: doc.type || "docx", content: codeContent,
+          });
+        }
+        setFeishuDocs(prev => prev.map(d => d.token === doc.token ? { ...d, manualContent: codeContent } : d));
+        toast({ title: `${doc.name} 同步成功` });
+      } else {
+        toast({ title: "未找到代码块内容", variant: "destructive" });
+      }
+    } catch (e: any) {
+      toast({ title: `同步失败: ${e.message}`, variant: "destructive" });
+    } finally {
+      setSyncingDoc(null);
+    }
+  };
+
+  // File upload handler
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (evt) => {
+      const content = evt.target?.result as string;
+      setScrapedData((prev) => prev ? `${prev}\n\n---\n\n${content}` : content);
+      toast({ title: `已加载文件: ${file.name}` });
+    };
+    reader.readAsText(file);
+    e.target.value = "";
+  };
+
   const toggleDoc = (token: string) => {
     setSelectedDocs((prev) => {
       const next = prev.includes(token) ? prev.filter((t) => t !== token) : [...prev, token];
-      // Auto-switch to batch mode when multiple docs selected
       if (next.length > 1) setMode("batch");
       else if (next.length <= 1) setMode("single");
       return next;
@@ -210,9 +282,7 @@ export default function SpokeGenerator() {
     try {
       await createDocument({
         project_id: currentProject.id,
-        token: data.token,
-        name: data.name,
-        type: "manual",
+        token: data.token, name: data.name, type: "manual",
         content: data.content || undefined,
       });
       setFeishuDocs((prev) => [{ token: data.token, name: data.name, type: "manual", manualContent: data.content || undefined }, ...prev]);
@@ -228,11 +298,7 @@ export default function SpokeGenerator() {
     try {
       await updateDocument(currentProject.id, data.token, { name: data.name, content: data.content || undefined });
       setFeishuDocs((prev) =>
-        prev.map((d) =>
-          d.token === data.token
-            ? { ...d, name: data.name, manualContent: data.content || undefined }
-            : d
-        )
+        prev.map((d) => d.token === data.token ? { ...d, name: data.name, manualContent: data.content || undefined } : d)
       );
       toast({ title: "文档已更新" });
     } catch (e: any) {
@@ -253,7 +319,6 @@ export default function SpokeGenerator() {
     setOutput("");
     setValidation("idle");
 
-    // Collect all selected doc contents
     const contentParts: string[] = [];
     for (const token of selectedDocs) {
       const doc = feishuDocs.find((d) => d.token === token);
@@ -276,7 +341,6 @@ export default function SpokeGenerator() {
       const feishuContent = contentParts.join("\n\n---\n\n");
       const firstDoc = feishuDocs.find((d) => d.token === selectedDocs[0]);
 
-      // 查找已有 Spoke JSON 作为参考
       let existingJsonContext = "";
       if (firstDoc?.token) {
         try {
@@ -301,7 +365,6 @@ export default function SpokeGenerator() {
       });
 
       const generatedJson = result.generated_json;
-      // 强制 hubSlug 与主题名称一致
       const themeName = themes.find((t) => t.id === selectedTheme)?.name;
       if (generatedJson && typeof generatedJson === "object" && themeName) {
         (generatedJson as any).hubSlug = themeName;
@@ -364,6 +427,7 @@ export default function SpokeGenerator() {
     toast({ title: "已放弃生成结果" });
   };
 
+  // Batch generate: generate all but DON'T save - store results for review
   const handleGenerateBatch = async () => {
     if (!selectedTheme) {
       toast({ title: "请选择主题", variant: "destructive" });
@@ -374,11 +438,12 @@ export default function SpokeGenerator() {
       return;
     }
     setLoading(true);
-    setBatchProgress({ total: selectedDocs.length, done: 0, results: [] });
+    setBatchResults([]);
+    setBatchProgress({ total: selectedDocs.length, done: 0 });
     setOutput("");
     setValidation("idle");
 
-    const results: { title: string; success: boolean }[] = [];
+    const results: BatchResult[] = [];
     for (let i = 0; i < selectedDocs.length; i++) {
       const doc = feishuDocs.find((d) => d.token === selectedDocs[i]);
       const docTitle = doc?.name || `Spoke ${i + 1}`;
@@ -393,7 +458,6 @@ export default function SpokeGenerator() {
           } catch { /* fallback to title */ }
         }
 
-        // 查找已有 Spoke JSON 作为参考
         let existingJsonContext = "";
         if (doc?.token) {
           try {
@@ -416,35 +480,73 @@ export default function SpokeGenerator() {
           context: contextParts || undefined,
         });
         const generatedJson = result.generated_json;
-        // 强制 hubSlug 与主题名称一致
         const themeName = themes.find((t) => t.id === selectedTheme)?.name;
         if (generatedJson && typeof generatedJson === "object" && themeName) {
           (generatedJson as any).hubSlug = themeName;
         }
         const title = generatedJson?.title || docTitle;
+        const code = JSON.stringify(generatedJson, null, 2);
 
-        await saveJsonRecord({
-          type: "spoke",
-          feishu_content: feishuContent,
-          prompt_content: result.prompt_used || prompt,
-          generated_json: generatedJson,
+        results.push({
+          doc: doc || { token: selectedDocs[i], name: docTitle, type: "unknown" },
+          generatedJson, code, feishuContent,
+          promptUsed: result.prompt_used || prompt,
+          title, confirmed: false, discarded: false,
         });
-
-        await upsertSpoke(selectedTheme, doc?.token || null, {
-          title,
-          json_data: generatedJson,
-          feishu_doc_token: doc?.token || null,
-          feishu_doc_title: doc?.name || null,
-          status: "generated",
+      } catch (e: any) {
+        results.push({
+          doc: doc || { token: selectedDocs[i], name: docTitle, type: "unknown" },
+          generatedJson: null,
+          code: JSON.stringify({ error: e.message }, null, 2),
+          feishuContent: "", promptUsed: prompt,
+          title: docTitle, confirmed: false, discarded: false,
+          error: e.message,
         });
-        results.push({ title, success: true });
-      } catch {
-        results.push({ title: docTitle, success: false });
       }
-      setBatchProgress({ total: selectedDocs.length, done: i + 1, results: [...results] });
+      setBatchProgress({ total: selectedDocs.length, done: i + 1 });
     }
+
+    setBatchResults(results);
+    setActiveBatchTab("0");
     setLoading(false);
-    toast({ title: "批量生成完成", description: `成功 ${results.filter((r) => r.success).length}/${results.length}` });
+    setBatchProgress(null);
+    toast({ title: "批量生成完成，请逐个检查后确认保存" });
+  };
+
+  // Confirm a single batch result
+  const handleConfirmBatchItem = async (index: number, editedCode: string) => {
+    const r = batchResults[index];
+    if (!r || r.confirmed || r.discarded) return;
+    try {
+      const editedJson = JSON.parse(editedCode);
+      await saveJsonRecord({
+        type: "spoke",
+        feishu_content: r.feishuContent,
+        prompt_content: r.promptUsed,
+        generated_json: editedJson,
+      });
+      await upsertSpoke(selectedTheme, r.doc.token || null, {
+        title: editedJson?.title || r.title,
+        json_data: editedJson,
+        feishu_doc_token: r.doc.token || null,
+        feishu_doc_title: r.doc.name || null,
+        status: "generated",
+      });
+      setBatchResults(prev => prev.map((item, i) =>
+        i === index ? { ...item, confirmed: true, code: editedCode } : item
+      ));
+      toast({ title: `${r.title} 已确认保存` });
+    } catch (e: any) {
+      toast({ title: "保存失败", description: e.message, variant: "destructive" });
+    }
+  };
+
+  // Discard a single batch result
+  const handleDiscardBatchItem = (index: number) => {
+    setBatchResults(prev => prev.map((item, i) =>
+      i === index ? { ...item, discarded: true } : item
+    ));
+    toast({ title: "已放弃该生成结果" });
   };
 
   const filteredDocs = feishuDocs.filter((d) =>
@@ -452,6 +554,9 @@ export default function SpokeGenerator() {
   );
 
   const spokeSpecs = specs.filter((s) => s.type === "spoke");
+
+  const batchConfirmedCount = batchResults.filter(r => r.confirmed).length;
+  const batchDiscardedCount = batchResults.filter(r => r.discarded).length;
 
   return (
     <div className="p-6 h-full flex flex-col gap-4">
@@ -536,9 +641,9 @@ export default function SpokeGenerator() {
                 <Button variant="outline" size="sm" onClick={handleLoadDocuments} disabled={loadingDocs} className="h-9 text-xs">
                   {loadingDocs ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : "刷新"}
                 </Button>
-                <Button variant="outline" size="sm" onClick={handleSyncAgent3} disabled={syncing || feishuDocs.length === 0} className="h-9 text-xs gap-1">
+                <Button variant="outline" size="sm" onClick={handleSyncContent} disabled={syncing || feishuDocs.length === 0} className="h-9 text-xs gap-1">
                   {syncing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
-                  同步 Agent3
+                  内容同步
                 </Button>
               </div>
               <div className="max-h-[240px] overflow-auto space-y-1">
@@ -568,6 +673,17 @@ export default function SpokeGenerator() {
                         )}
                       </div>
                     </div>
+                    {/* Per-doc sync button */}
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity shrink-0"
+                      onClick={(e) => { e.preventDefault(); e.stopPropagation(); handleSyncSingle(doc); }}
+                      title="同步此文档"
+                      disabled={syncingDoc === doc.token}
+                    >
+                      {syncingDoc === doc.token ? <Loader2 className="h-3 w-3 animate-spin" /> : <RefreshCw className="h-3 w-3" />}
+                    </Button>
                     <DocFormDialog
                       mode="edit"
                       initialData={{ token: doc.token, name: doc.name, content: doc.manualContent || "" }}
@@ -592,15 +708,29 @@ export default function SpokeGenerator() {
 
           <Card>
             <CardHeader className="pb-3">
-              <CardTitle className="text-base">补充内容</CardTitle>
+              <CardTitle className="text-base">文档内容</CardTitle>
             </CardHeader>
-            <CardContent>
+            <CardContent className="space-y-2">
               <Textarea
-                placeholder={mode === "batch" ? "补充内容将应用于所有选中文档的生成…" : "补充的原始文本内容、行业背景、关键词等…"}
+                placeholder={mode === "batch" ? "文档内容将应用于所有选中文档的生成…" : "补充的原始文本内容、行业背景、关键词等…"}
                 value={scrapedData}
                 onChange={(e) => setScrapedData(e.target.value)}
                 className="min-h-[100px] font-mono text-xs"
               />
+              <div className="flex items-center gap-2">
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept=".txt,.md,.csv,.json,.mdx"
+                  className="hidden"
+                  onChange={handleFileUpload}
+                />
+                <Button variant="outline" size="sm" className="gap-1.5 text-xs" onClick={() => fileInputRef.current?.click()}>
+                  <Upload className="h-3.5 w-3.5" />
+                  上传文档
+                </Button>
+                <span className="text-[10px] text-muted-foreground">支持 .txt, .md, .csv, .json 格式</span>
+              </div>
             </CardContent>
           </Card>
 
@@ -609,7 +739,7 @@ export default function SpokeGenerator() {
               <CardTitle className="text-base">组件规范</CardTitle>
             </CardHeader>
             <CardContent className="space-y-3">
-              <Select defaultValue="spoke-default">
+              <Select value={selectedSpec} onValueChange={setSelectedSpec}>
                 <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>
@@ -639,7 +769,8 @@ export default function SpokeGenerator() {
             message={validation === "passed" ? "✅ Schema 验证通过" : validation === "failed" ? "❌ 验证失败：返回内容不是有效的 JSON 对象" : undefined}
           />
           <Card className="flex-1 min-h-0 flex flex-col">
-            {mode === "batch" && batchProgress ? (
+            {/* Batch: show progress during generation */}
+            {mode === "batch" && batchProgress && loading ? (
               <div className="p-4 space-y-3 overflow-auto">
                 <div className="flex items-center gap-3">
                   <div className="flex-1 h-2 bg-muted rounded-full overflow-hidden">
@@ -650,22 +781,46 @@ export default function SpokeGenerator() {
                   </div>
                   <span className="text-xs font-mono text-muted-foreground">{batchProgress.done}/{batchProgress.total}</span>
                 </div>
-                <div className="space-y-1">
-                  {batchProgress.results.map((r, i) => (
-                    <div key={i} className="flex items-center gap-2 text-xs p-2 rounded bg-muted/30">
-                      <span className={r.success ? "text-success" : "text-destructive"}>{r.success ? "✅" : "❌"}</span>
-                      <span className="truncate">{r.title}</span>
-                    </div>
-                  ))}
-                  {loading && (
-                    <div className="flex items-center gap-2 text-xs p-2 text-muted-foreground">
-                      <Loader2 className="h-3 w-3 animate-spin" />
-                      处理中…
-                    </div>
-                  )}
+                <div className="flex items-center gap-2 text-xs p-2 text-muted-foreground">
+                  <Loader2 className="h-3 w-3 animate-spin" />
+                  正在生成中…
                 </div>
               </div>
+            ) : mode === "batch" && batchResults.length > 0 ? (
+              /* Batch: show tabs for review after generation */
+              <div className="flex-1 flex flex-col min-h-0">
+                <div className="border-b px-2 py-1 flex items-center gap-2 shrink-0">
+                  <span className="text-[10px] text-muted-foreground">
+                    ✅ {batchConfirmedCount} 已确认 / ❌ {batchDiscardedCount} 已放弃 / 共 {batchResults.length}
+                  </span>
+                </div>
+                <Tabs value={activeBatchTab} onValueChange={setActiveBatchTab} className="flex-1 flex flex-col min-h-0">
+                  <div className="border-b px-2 overflow-x-auto shrink-0">
+                    <TabsList className="bg-transparent h-9 w-max">
+                      {batchResults.map((r, i) => (
+                        <TabsTrigger key={i} value={String(i)} className="text-[10px] gap-1 max-w-[120px]">
+                          {r.confirmed ? "✅" : r.discarded ? "❌" : r.error ? "⚠️" : "⏳"}
+                          <span className="truncate">{r.doc.name.length > 12 ? r.doc.name.slice(0, 12) + "…" : r.doc.name}</span>
+                        </TabsTrigger>
+                      ))}
+                    </TabsList>
+                  </div>
+                  {batchResults.map((r, i) => (
+                    <TabsContent key={i} value={String(i)} className="flex-1 m-0 min-h-0">
+                      <CodeViewer
+                        code={r.code}
+                        filename={`${r.title}.json`}
+                        editable={!r.confirmed && !r.discarded && !r.error}
+                        onConfirm={(editedCode) => handleConfirmBatchItem(i, editedCode)}
+                        onDiscard={() => handleDiscardBatchItem(i)}
+                        confirmed={r.confirmed}
+                      />
+                    </TabsContent>
+                  ))}
+                </Tabs>
+              </div>
             ) : (
+              /* Single mode */
               <Tabs defaultValue="json" className="flex-1 flex flex-col">
                 <div className="border-b px-4">
                   <TabsList className="bg-transparent h-9">

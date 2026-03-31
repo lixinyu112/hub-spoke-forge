@@ -1,7 +1,0 @@
-project_id = "etuyrpjurzgabpglphkx"
-
-[functions.feishu-docs]
-verify_jwt = false
-
-[functions.generate-json]
-verify_jwt = false

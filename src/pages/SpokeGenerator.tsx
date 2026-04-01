@@ -148,16 +148,27 @@ export default function SpokeGenerator() {
             m.supabase.from("spokes").select("feishu_doc_token, updated_at").eq("theme_id", selectedTheme)
           ),
         ]);
-        const dbMap = new Map(dbDocs.map((d: any) => [d.token, d.content]));
+        const dbMap = new Map(dbDocs.map((d: any) => [d.token, { content: d.content, updated_at: d.updated_at }]));
         const spokeMap = new Map(
           (spokesRes.data || []).map((s: any) => [s.feishu_doc_token, s.updated_at])
         );
-        docs = docs.map((d) => ({
-          ...d,
-          manualContent: (dbMap.get(d.token) as string) || undefined,
-          lastGeneratedAt: (spokeMap.get(d.token) as string) || undefined,
-          isNew: !dbMap.has(d.token) && !spokeMap.has(d.token),
-        }));
+        docs = docs.map((d) => {
+          const dbEntry = dbMap.get(d.token) as { content: string; updated_at: string } | undefined;
+          const spokeUpdatedAt = spokeMap.get(d.token) as string | undefined;
+          const isNew = !dbEntry && !spokeUpdatedAt;
+          // Only show "updated" when doc was modified AFTER last generation
+          let isUpdated = false;
+          if (!isNew && d.modifiedTime && spokeUpdatedAt) {
+            isUpdated = new Date(d.modifiedTime) > new Date(spokeUpdatedAt);
+          }
+          return {
+            ...d,
+            manualContent: dbEntry?.content || undefined,
+            lastGeneratedAt: spokeUpdatedAt || undefined,
+            isNew,
+            isUpdated,
+          };
+        });
       } catch (e) {
         console.warn("DB 文档/Spoke 加载失败:", e);
       }

@@ -153,6 +153,7 @@ export default function SpokeGenerator() {
           ...d,
           manualContent: (dbMap.get(d.token) as string) || undefined,
           lastGeneratedAt: (spokeMap.get(d.token) as string) || undefined,
+          isNew: !dbMap.has(d.token) && !spokeMap.has(d.token),
         }));
       } catch (e) {
         console.warn("DB 文档/Spoke 加载失败:", e);

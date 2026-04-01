@@ -730,6 +730,7 @@ export default function SpokeGenerator() {
                       }
                     />
                     {doc.isNew && <Badge className="text-[10px] shrink-0 bg-primary text-primary-foreground">NEW</Badge>}
+                    {doc.isUpdated && <Badge className="text-[10px] shrink-0 bg-orange-500 text-white">已更新</Badge>}
                     <Badge variant="outline" className="text-[10px] shrink-0">{doc.type}</Badge>
                   </label>
                 ))}

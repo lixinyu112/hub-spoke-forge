@@ -700,6 +700,7 @@ export default function SpokeGenerator() {
                         </Button>
                       }
                     />
+                    {doc.isNew && <Badge className="text-[10px] shrink-0 bg-primary text-primary-foreground">NEW</Badge>}
                     <Badge variant="outline" className="text-[10px] shrink-0">{doc.type}</Badge>
                   </label>
                 ))}

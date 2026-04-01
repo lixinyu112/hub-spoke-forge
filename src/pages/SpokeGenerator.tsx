@@ -464,7 +464,10 @@ export default function SpokeGenerator() {
     toast({ title: "已放弃生成结果" });
   };
 
-  // Batch generate: generate all but DON'T save - store results for review
+  // Helper: delay between batch items to avoid rate limiting
+  const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+
+  // Batch generate: one-by-one with delay and retry
   const handleGenerateBatch = async () => {
     if (!selectedTheme) {
       toast({ title: "请选择主题", variant: "destructive" });
@@ -481,66 +484,102 @@ export default function SpokeGenerator() {
     setValidation("idle");
 
     const results: BatchResult[] = [];
+    const MAX_RETRIES = 2;
+
     for (let i = 0; i < selectedDocs.length; i++) {
       const doc = feishuDocs.find((d) => d.token === selectedDocs[i]);
       const docTitle = doc?.name || `Spoke ${i + 1}`;
-      try {
-        let feishuContent = docTitle;
-        if (doc?.type === "manual" && doc.manualContent) {
-          feishuContent = doc.manualContent;
-        } else if (doc) {
-          try {
-            const docRes = await fetchFeishuDocContent(doc.token, doc.type);
-            feishuContent = docRes?.data?.content || JSON.stringify(docRes?.data) || docTitle;
-          } catch { /* fallback to title */ }
+
+      // Add delay between items (skip first)
+      if (i > 0) await delay(3000);
+
+      let lastError: string | null = null;
+      let success = false;
+
+      for (let attempt = 0; attempt <= MAX_RETRIES && !success; attempt++) {
+        if (attempt > 0) {
+          console.log(`重试第 ${attempt} 次: ${docTitle}`);
+          await delay(2000);
         }
 
-        let existingJsonContext = "";
-        if (doc?.token) {
-          try {
-            const { supabase } = await import("@/integrations/supabase/client");
-            const { data: existingSpoke } = await supabase.from("spokes").select("json_data").eq("theme_id", selectedTheme).eq("feishu_doc_token", doc.token).maybeSingle();
-            if (existingSpoke?.json_data) {
-              existingJsonContext = `\n\n【已有 Spoke JSON（请在此基础上修改内容，保留结构）】\n${JSON.stringify(existingSpoke.json_data, null, 2)}`;
-            }
-          } catch (e) {
-            console.warn("查找已有 Spoke JSON 失败:", e);
+        try {
+          let feishuContent = docTitle;
+          if (doc?.type === "manual" && doc.manualContent) {
+            feishuContent = doc.manualContent;
+          } else if (doc) {
+            try {
+              const docRes = await fetchFeishuDocContent(doc.token, doc.type);
+              feishuContent = docRes?.data?.content || JSON.stringify(docRes?.data) || docTitle;
+            } catch { /* fallback to title */ }
           }
+
+          let existingJsonContext = "";
+          if (doc?.token) {
+            try {
+              const { supabase } = await import("@/integrations/supabase/client");
+              const { data: existingSpoke } = await supabase.from("spokes").select("json_data").eq("theme_id", selectedTheme).eq("feishu_doc_token", doc.token).maybeSingle();
+              if (existingSpoke?.json_data) {
+                existingJsonContext = `\n\n【已有 Spoke JSON（请在此基础上修改内容，保留结构）】\n${JSON.stringify(existingSpoke.json_data, null, 2)}`;
+              }
+            } catch (e) {
+              console.warn("查找已有 Spoke JSON 失败:", e);
+            }
+          }
+
+          // Build context with supplementary content + JSON template
+          const ctxParts: string[] = [];
+          if (scrapedData) ctxParts.push(scrapedData);
+          if (existingJsonContext) ctxParts.push(existingJsonContext);
+          if (uploadedJsonTemplate) {
+            ctxParts.push(`\n\n【用户提供的 JSON 模板（请严格按照此格式和字段结构生成，仅更新内容）】\n${uploadedJsonTemplate}`);
+          }
+          const contextStr = ctxParts.join("\n");
+
+          // Add retry hint to prompt on retry attempts
+          const retryPrompt = attempt > 0
+            ? `${prompt || ""}\n\n【重要】只返回合法 JSON，不要包含 markdown 代码块标记，不要附加任何解释文字。`
+            : prompt;
+
+          const result = await generateJson({
+            type: "spoke",
+            feishu_content: feishuContent,
+            custom_prompt: retryPrompt || undefined,
+            context: contextStr || undefined,
+          });
+          const generatedJson = result.generated_json;
+          const themeName = themes.find((t) => t.id === selectedTheme)?.name;
+          if (generatedJson && typeof generatedJson === "object" && themeName) {
+            (generatedJson as any).hubSlug = themeName;
+          }
+          const title = generatedJson?.title || docTitle;
+          const code = JSON.stringify(generatedJson, null, 2);
+
+          results.push({
+            doc: doc || { token: selectedDocs[i], name: docTitle, type: "unknown" },
+            generatedJson, code, feishuContent,
+            promptUsed: result.prompt_used || prompt,
+            title, confirmed: false, discarded: false,
+          });
+          success = true;
+        } catch (e: any) {
+          lastError = e.message;
         }
+      }
 
-        const contextParts = [scrapedData, existingJsonContext].filter(Boolean).join("\n");
-
-        const result = await generateJson({
-          type: "spoke",
-          feishu_content: feishuContent,
-          custom_prompt: prompt || undefined,
-          context: contextParts || undefined,
-        });
-        const generatedJson = result.generated_json;
-        const themeName = themes.find((t) => t.id === selectedTheme)?.name;
-        if (generatedJson && typeof generatedJson === "object" && themeName) {
-          (generatedJson as any).hubSlug = themeName;
-        }
-        const title = generatedJson?.title || docTitle;
-        const code = JSON.stringify(generatedJson, null, 2);
-
-        results.push({
-          doc: doc || { token: selectedDocs[i], name: docTitle, type: "unknown" },
-          generatedJson, code, feishuContent,
-          promptUsed: result.prompt_used || prompt,
-          title, confirmed: false, discarded: false,
-        });
-      } catch (e: any) {
+      if (!success) {
         results.push({
           doc: doc || { token: selectedDocs[i], name: docTitle, type: "unknown" },
           generatedJson: null,
-          code: JSON.stringify({ error: e.message }, null, 2),
+          code: JSON.stringify({ error: lastError }, null, 2),
           feishuContent: "", promptUsed: prompt,
           title: docTitle, confirmed: false, discarded: false,
-          error: e.message,
+          error: lastError || "生成失败",
         });
       }
+
+      // Update progress and results incrementally
       setBatchProgress({ total: selectedDocs.length, done: i + 1 });
+      setBatchResults([...results]);
     }
 
     setBatchResults(results);

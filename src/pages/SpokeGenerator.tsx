@@ -385,13 +385,20 @@ export default function SpokeGenerator() {
         }
       }
 
-      const contextParts = [scrapedData, existingJsonContext].filter(Boolean).join("\n");
+      // Build context: supplementary content + existing JSON + uploaded JSON template
+      const ctxParts: string[] = [];
+      if (scrapedData) ctxParts.push(scrapedData);
+      if (existingJsonContext) ctxParts.push(existingJsonContext);
+      if (uploadedJsonTemplate) {
+        ctxParts.push(`\n\n【用户提供的 JSON 模板（请严格按照此格式和字段结构生成，仅更新内容）】\n${uploadedJsonTemplate}`);
+      }
+      const contextStr = ctxParts.join("\n");
 
       const result = await generateJson({
         type: "spoke",
         feishu_content: feishuContent,
         custom_prompt: prompt || undefined,
-        context: contextParts || undefined,
+        context: contextStr || undefined,
       });
 
       const generatedJson = result.generated_json;

@@ -807,7 +807,13 @@ export default function SpokeGenerator() {
                   <Upload className="h-3.5 w-3.5" />
                   上传文档
                 </Button>
-                <span className="text-[10px] text-muted-foreground">支持 .txt, .md, .csv, .json 格式</span>
+                <span className="text-[10px] text-muted-foreground">支持 .txt, .md, .csv, .json 格式（上传 .json 将作为生成模板）</span>
+                {uploadedJsonTemplate && (
+                  <Badge variant="secondary" className="text-[10px] gap-1">
+                    JSON 模板已加载
+                    <button className="ml-1 hover:text-destructive" onClick={() => setUploadedJsonTemplate(null)}>✕</button>
+                  </Badge>
+                )}
               </div>
             </CardContent>
           </Card>

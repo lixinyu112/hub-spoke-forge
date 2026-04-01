@@ -29,6 +29,7 @@ interface FeishuDoc {
   modifiedTime?: string;
   lastGeneratedAt?: string;
   isNew?: boolean;
+  isUpdated?: boolean;
 }
 
 interface BatchResult {
@@ -81,6 +82,9 @@ export default function SpokeGenerator() {
 
   // File upload ref
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Uploaded JSON template (requirement #4)
+  const [uploadedJsonTemplate, setUploadedJsonTemplate] = useState<string | null>(null);
 
   useEffect(() => {
     if (currentProject) {
@@ -145,16 +149,27 @@ export default function SpokeGenerator() {
             m.supabase.from("spokes").select("feishu_doc_token, updated_at").eq("theme_id", selectedTheme)
           ),
         ]);
-        const dbMap = new Map(dbDocs.map((d: any) => [d.token, d.content]));
+        const dbMap = new Map(dbDocs.map((d: any) => [d.token, { content: d.content, updated_at: d.updated_at }]));
         const spokeMap = new Map(
           (spokesRes.data || []).map((s: any) => [s.feishu_doc_token, s.updated_at])
         );
-        docs = docs.map((d) => ({
-          ...d,
-          manualContent: (dbMap.get(d.token) as string) || undefined,
-          lastGeneratedAt: (spokeMap.get(d.token) as string) || undefined,
-          isNew: !dbMap.has(d.token) && !spokeMap.has(d.token),
-        }));
+        docs = docs.map((d) => {
+          const dbEntry = dbMap.get(d.token) as { content: string; updated_at: string } | undefined;
+          const spokeUpdatedAt = spokeMap.get(d.token) as string | undefined;
+          const isNew = !dbEntry && !spokeUpdatedAt;
+          // Only show "updated" when doc was modified AFTER last generation
+          let isUpdated = false;
+          if (!isNew && d.modifiedTime && spokeUpdatedAt) {
+            isUpdated = new Date(d.modifiedTime) > new Date(spokeUpdatedAt);
+          }
+          return {
+            ...d,
+            manualContent: dbEntry?.content || undefined,
+            lastGeneratedAt: spokeUpdatedAt || undefined,
+            isNew,
+            isUpdated,
+          };
+        });
       } catch (e) {
         console.warn("DB 文档/Spoke 加载失败:", e);
       }
@@ -248,15 +263,28 @@ export default function SpokeGenerator() {
     }
   };
 
-  // File upload handler
+  // File upload handler - detect JSON for template priority
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
     const reader = new FileReader();
     reader.onload = (evt) => {
       const content = evt.target?.result as string;
-      setScrapedData((prev) => prev ? `${prev}\n\n---\n\n${content}` : content);
-      toast({ title: `已加载文件: ${file.name}` });
+      // If JSON file, store as template for format priority (requirement #4)
+      if (file.name.endsWith('.json')) {
+        try {
+          JSON.parse(content); // validate
+          setUploadedJsonTemplate(content);
+          toast({ title: `已加载 JSON 模板: ${file.name}，将优先按此格式生成` });
+        } catch {
+          // Not valid JSON, treat as regular content
+          setScrapedData((prev) => prev ? `${prev}\n\n---\n\n${content}` : content);
+          toast({ title: `已加载文件: ${file.name}` });
+        }
+      } else {
+        setScrapedData((prev) => prev ? `${prev}\n\n---\n\n${content}` : content);
+        toast({ title: `已加载文件: ${file.name}` });
+      }
     };
     reader.readAsText(file);
     e.target.value = "";
@@ -357,13 +385,20 @@ export default function SpokeGenerator() {
         }
       }
 
-      const contextParts = [scrapedData, existingJsonContext].filter(Boolean).join("\n");
+      // Build context: supplementary content + existing JSON + uploaded JSON template
+      const ctxParts: string[] = [];
+      if (scrapedData) ctxParts.push(scrapedData);
+      if (existingJsonContext) ctxParts.push(existingJsonContext);
+      if (uploadedJsonTemplate) {
+        ctxParts.push(`\n\n【用户提供的 JSON 模板（请严格按照此格式和字段结构生成，仅更新内容）】\n${uploadedJsonTemplate}`);
+      }
+      const contextStr = ctxParts.join("\n");
 
       const result = await generateJson({
         type: "spoke",
         feishu_content: feishuContent,
         custom_prompt: prompt || undefined,
-        context: contextParts || undefined,
+        context: contextStr || undefined,
       });
 
       const generatedJson = result.generated_json;
@@ -429,7 +464,10 @@ export default function SpokeGenerator() {
     toast({ title: "已放弃生成结果" });
   };
 
-  // Batch generate: generate all but DON'T save - store results for review
+  // Helper: delay between batch items to avoid rate limiting
+  const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+
+  // Batch generate: one-by-one with delay and retry
   const handleGenerateBatch = async () => {
     if (!selectedTheme) {
       toast({ title: "请选择主题", variant: "destructive" });
@@ -446,66 +484,102 @@ export default function SpokeGenerator() {
     setValidation("idle");
 
     const results: BatchResult[] = [];
+    const MAX_RETRIES = 2;
+
     for (let i = 0; i < selectedDocs.length; i++) {
       const doc = feishuDocs.find((d) => d.token === selectedDocs[i]);
       const docTitle = doc?.name || `Spoke ${i + 1}`;
-      try {
-        let feishuContent = docTitle;
-        if (doc?.type === "manual" && doc.manualContent) {
-          feishuContent = doc.manualContent;
-        } else if (doc) {
-          try {
-            const docRes = await fetchFeishuDocContent(doc.token, doc.type);
-            feishuContent = docRes?.data?.content || JSON.stringify(docRes?.data) || docTitle;
-          } catch { /* fallback to title */ }
+
+      // Add delay between items (skip first)
+      if (i > 0) await delay(3000);
+
+      let lastError: string | null = null;
+      let success = false;
+
+      for (let attempt = 0; attempt <= MAX_RETRIES && !success; attempt++) {
+        if (attempt > 0) {
+          console.log(`重试第 ${attempt} 次: ${docTitle}`);
+          await delay(2000);
         }
 
-        let existingJsonContext = "";
-        if (doc?.token) {
-          try {
-            const { supabase } = await import("@/integrations/supabase/client");
-            const { data: existingSpoke } = await supabase.from("spokes").select("json_data").eq("theme_id", selectedTheme).eq("feishu_doc_token", doc.token).maybeSingle();
-            if (existingSpoke?.json_data) {
-              existingJsonContext = `\n\n【已有 Spoke JSON（请在此基础上修改内容，保留结构）】\n${JSON.stringify(existingSpoke.json_data, null, 2)}`;
-            }
-          } catch (e) {
-            console.warn("查找已有 Spoke JSON 失败:", e);
+        try {
+          let feishuContent = docTitle;
+          if (doc?.type === "manual" && doc.manualContent) {
+            feishuContent = doc.manualContent;
+          } else if (doc) {
+            try {
+              const docRes = await fetchFeishuDocContent(doc.token, doc.type);
+              feishuContent = docRes?.data?.content || JSON.stringify(docRes?.data) || docTitle;
+            } catch { /* fallback to title */ }
           }
+
+          let existingJsonContext = "";
+          if (doc?.token) {
+            try {
+              const { supabase } = await import("@/integrations/supabase/client");
+              const { data: existingSpoke } = await supabase.from("spokes").select("json_data").eq("theme_id", selectedTheme).eq("feishu_doc_token", doc.token).maybeSingle();
+              if (existingSpoke?.json_data) {
+                existingJsonContext = `\n\n【已有 Spoke JSON（请在此基础上修改内容，保留结构）】\n${JSON.stringify(existingSpoke.json_data, null, 2)}`;
+              }
+            } catch (e) {
+              console.warn("查找已有 Spoke JSON 失败:", e);
+            }
+          }
+
+          // Build context with supplementary content + JSON template
+          const ctxParts: string[] = [];
+          if (scrapedData) ctxParts.push(scrapedData);
+          if (existingJsonContext) ctxParts.push(existingJsonContext);
+          if (uploadedJsonTemplate) {
+            ctxParts.push(`\n\n【用户提供的 JSON 模板（请严格按照此格式和字段结构生成，仅更新内容）】\n${uploadedJsonTemplate}`);
+          }
+          const contextStr = ctxParts.join("\n");
+
+          // Add retry hint to prompt on retry attempts
+          const retryPrompt = attempt > 0
+            ? `${prompt || ""}\n\n【重要】只返回合法 JSON，不要包含 markdown 代码块标记，不要附加任何解释文字。`
+            : prompt;
+
+          const result = await generateJson({
+            type: "spoke",
+            feishu_content: feishuContent,
+            custom_prompt: retryPrompt || undefined,
+            context: contextStr || undefined,
+          });
+          const generatedJson = result.generated_json;
+          const themeName = themes.find((t) => t.id === selectedTheme)?.name;
+          if (generatedJson && typeof generatedJson === "object" && themeName) {
+            (generatedJson as any).hubSlug = themeName;
+          }
+          const title = generatedJson?.title || docTitle;
+          const code = JSON.stringify(generatedJson, null, 2);
+
+          results.push({
+            doc: doc || { token: selectedDocs[i], name: docTitle, type: "unknown" },
+            generatedJson, code, feishuContent,
+            promptUsed: result.prompt_used || prompt,
+            title, confirmed: false, discarded: false,
+          });
+          success = true;
+        } catch (e: any) {
+          lastError = e.message;
         }
+      }
 
-        const contextParts = [scrapedData, existingJsonContext].filter(Boolean).join("\n");
-
-        const result = await generateJson({
-          type: "spoke",
-          feishu_content: feishuContent,
-          custom_prompt: prompt || undefined,
-          context: contextParts || undefined,
-        });
-        const generatedJson = result.generated_json;
-        const themeName = themes.find((t) => t.id === selectedTheme)?.name;
-        if (generatedJson && typeof generatedJson === "object" && themeName) {
-          (generatedJson as any).hubSlug = themeName;
-        }
-        const title = generatedJson?.title || docTitle;
-        const code = JSON.stringify(generatedJson, null, 2);
-
-        results.push({
-          doc: doc || { token: selectedDocs[i], name: docTitle, type: "unknown" },
-          generatedJson, code, feishuContent,
-          promptUsed: result.prompt_used || prompt,
-          title, confirmed: false, discarded: false,
-        });
-      } catch (e: any) {
+      if (!success) {
         results.push({
           doc: doc || { token: selectedDocs[i], name: docTitle, type: "unknown" },
           generatedJson: null,
-          code: JSON.stringify({ error: e.message }, null, 2),
+          code: JSON.stringify({ error: lastError }, null, 2),
           feishuContent: "", promptUsed: prompt,
           title: docTitle, confirmed: false, discarded: false,
-          error: e.message,
+          error: lastError || "生成失败",
         });
       }
+
+      // Update progress and results incrementally
       setBatchProgress({ total: selectedDocs.length, done: i + 1 });
+      setBatchResults([...results]);
     }
 
     setBatchResults(results);
@@ -702,6 +776,7 @@ export default function SpokeGenerator() {
                       }
                     />
                     {doc.isNew && <Badge className="text-[10px] shrink-0 bg-primary text-primary-foreground">NEW</Badge>}
+                    {doc.isUpdated && <Badge className="text-[10px] shrink-0 bg-orange-500 text-white">已更新</Badge>}
                     <Badge variant="outline" className="text-[10px] shrink-0">{doc.type}</Badge>
                   </label>
                 ))}
@@ -711,11 +786,11 @@ export default function SpokeGenerator() {
 
           <Card>
             <CardHeader className="pb-3">
-              <CardTitle className="text-base">文档内容</CardTitle>
+              <CardTitle className="text-base">补充内容</CardTitle>
             </CardHeader>
             <CardContent className="space-y-2">
               <Textarea
-                placeholder={mode === "batch" ? "文档内容将应用于所有选中文档的生成…" : "补充的原始文本内容、行业背景、关键词等…"}
+                placeholder="补充的原始文本内容、行业背景、关键词等（将与文档数据一起作为 AI 生成上下文）…"
                 value={scrapedData}
                 onChange={(e) => setScrapedData(e.target.value)}
                 className="min-h-[100px] font-mono text-xs"
@@ -732,7 +807,13 @@ export default function SpokeGenerator() {
                   <Upload className="h-3.5 w-3.5" />
                   上传文档
                 </Button>
-                <span className="text-[10px] text-muted-foreground">支持 .txt, .md, .csv, .json 格式</span>
+                <span className="text-[10px] text-muted-foreground">支持 .txt, .md, .csv, .json 格式（上传 .json 将作为生成模板）</span>
+                {uploadedJsonTemplate && (
+                  <Badge variant="secondary" className="text-[10px] gap-1">
+                    JSON 模板已加载
+                    <button className="ml-1 hover:text-destructive" onClick={() => setUploadedJsonTemplate(null)}>✕</button>
+                  </Badge>
+                )}
               </div>
             </CardContent>
           </Card>

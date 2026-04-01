@@ -28,6 +28,7 @@ interface FeishuDoc {
   manualContent?: string;
   modifiedTime?: string;
   lastGeneratedAt?: string;
+  isNew?: boolean;
 }
 
 interface BatchResult {

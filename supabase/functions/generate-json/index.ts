@@ -290,13 +290,10 @@ Deno.serve(async (req) => {
     const aiResult = await response.json();
     let content = aiResult.choices?.[0]?.message?.content || '';
 
-    // Strip markdown code fences if present
-    content = content.replace(/^```(?:json)?\s*\n?/i, '').replace(/\n?```\s*$/i, '').trim();
-
-    // Try to parse as JSON
+    // Robust JSON extraction from LLM response
     let parsedJson;
     try {
-      parsedJson = JSON.parse(content);
+      parsedJson = extractJsonFromResponse(content);
     } catch {
       // Return raw content if not valid JSON
       return new Response(JSON.stringify({

@@ -739,11 +739,11 @@ export default function SpokeGenerator() {
 
           <Card>
             <CardHeader className="pb-3">
-              <CardTitle className="text-base">文档内容</CardTitle>
+              <CardTitle className="text-base">补充内容</CardTitle>
             </CardHeader>
             <CardContent className="space-y-2">
               <Textarea
-                placeholder={mode === "batch" ? "文档内容将应用于所有选中文档的生成…" : "补充的原始文本内容、行业背景、关键词等…"}
+                placeholder="补充的原始文本内容、行业背景、关键词等（将与文档数据一起作为 AI 生成上下文）…"
                 value={scrapedData}
                 onChange={(e) => setScrapedData(e.target.value)}
                 className="min-h-[100px] font-mono text-xs"

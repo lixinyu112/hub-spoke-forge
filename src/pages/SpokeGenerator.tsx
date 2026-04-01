@@ -263,15 +263,28 @@ export default function SpokeGenerator() {
     }
   };
 
-  // File upload handler
+  // File upload handler - detect JSON for template priority
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
     const reader = new FileReader();
     reader.onload = (evt) => {
       const content = evt.target?.result as string;
-      setScrapedData((prev) => prev ? `${prev}\n\n---\n\n${content}` : content);
-      toast({ title: `已加载文件: ${file.name}` });
+      // If JSON file, store as template for format priority (requirement #4)
+      if (file.name.endsWith('.json')) {
+        try {
+          JSON.parse(content); // validate
+          setUploadedJsonTemplate(content);
+          toast({ title: `已加载 JSON 模板: ${file.name}，将优先按此格式生成` });
+        } catch {
+          // Not valid JSON, treat as regular content
+          setScrapedData((prev) => prev ? `${prev}\n\n---\n\n${content}` : content);
+          toast({ title: `已加载文件: ${file.name}` });
+        }
+      } else {
+        setScrapedData((prev) => prev ? `${prev}\n\n---\n\n${content}` : content);
+        toast({ title: `已加载文件: ${file.name}` });
+      }
     };
     reader.readAsText(file);
     e.target.value = "";

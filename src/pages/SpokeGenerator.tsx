@@ -82,6 +82,9 @@ export default function SpokeGenerator() {
   // File upload ref
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // Uploaded JSON template (requirement #4)
+  const [uploadedJsonTemplate, setUploadedJsonTemplate] = useState<string | null>(null);
+
   useEffect(() => {
     if (currentProject) {
       getThemes(currentProject.id).then(setThemes).catch(console.error);

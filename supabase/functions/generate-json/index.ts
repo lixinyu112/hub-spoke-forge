@@ -212,6 +212,68 @@ const HUB_SCHEMA_PROMPT = `你是一个 SEO 内容专家。请根据提供的 Sp
 9. tocNav 的 items 中 url 使用 "/hub-slug#组件id" 格式指向页面内锚点
 10. 只输出合法JSON，不要附加说明文字`;
 
+/**
+ * Robustly extract JSON from LLM response, handling markdown fences,
+ * trailing commas, control characters, and truncated output.
+ */
+function extractJsonFromResponse(response: string): unknown {
+  // Remove markdown code blocks
+  let cleaned = response
+    .replace(/```json\s*/gi, '')
+    .replace(/```\s*/g, '')
+    .trim();
+
+  // Find JSON boundaries
+  const jsonStart = cleaned.search(/[{[]/);
+  if (jsonStart === -1) throw new Error('No JSON object found in response');
+  const isArray = cleaned[jsonStart] === '[';
+  const closeChar = isArray ? ']' : '}';
+  const jsonEnd = cleaned.lastIndexOf(closeChar);
+  if (jsonEnd === -1) throw new Error('No closing bracket found in response');
+
+  cleaned = cleaned.substring(jsonStart, jsonEnd + 1);
+
+  // First attempt
+  try {
+    return JSON.parse(cleaned);
+  } catch (_) {
+    // Repair common issues
+    cleaned = cleaned
+      .replace(/,\s*}/g, '}')       // trailing commas before }
+      .replace(/,\s*]/g, ']')       // trailing commas before ]
+      .replace(/[\x00-\x1F\x7F]/g, (ch) => ch === '\n' || ch === '\r' || ch === '\t' ? ch : '') // remove control chars except whitespace
+      .replace(/([}\]"0-9])\s*\n\s*"/g, '$1,\n"') // missing commas between properties
+      .replace(/"\s*\n\s*"/g, '",\n"'); // missing commas between string values
+
+    try {
+      return JSON.parse(cleaned);
+    } catch (_) {
+      // Try to fix truncated JSON by closing open brackets
+      let fixed = cleaned;
+      let openBraces = 0, openBrackets = 0;
+      let inString = false, escaped = false;
+      for (const ch of fixed) {
+        if (escaped) { escaped = false; continue; }
+        if (ch === '\\') { escaped = true; continue; }
+        if (ch === '"') { inString = !inString; continue; }
+        if (inString) continue;
+        if (ch === '{') openBraces++;
+        else if (ch === '}') openBraces--;
+        else if (ch === '[') openBrackets++;
+        else if (ch === ']') openBrackets--;
+      }
+      // Remove trailing comma before we close
+      fixed = fixed.replace(/,\s*$/, '');
+      // Close any unclosed strings (heuristic)
+      if (inString) fixed += '"';
+      for (let i = 0; i < openBrackets; i++) fixed += ']';
+      for (let i = 0; i < openBraces; i++) fixed += '}';
+
+      return JSON.parse(fixed);
+    }
+  }
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
@@ -290,13 +352,10 @@ Deno.serve(async (req) => {
     const aiResult = await response.json();
     let content = aiResult.choices?.[0]?.message?.content || '';
 
-    // Strip markdown code fences if present
-    content = content.replace(/^```(?:json)?\s*\n?/i, '').replace(/\n?```\s*$/i, '').trim();
-
-    // Try to parse as JSON
+    // Robust JSON extraction from LLM response
     let parsedJson;
     try {
-      parsedJson = JSON.parse(content);
+      parsedJson = extractJsonFromResponse(content);
     } catch {
       // Return raw content if not valid JSON
       return new Response(JSON.stringify({

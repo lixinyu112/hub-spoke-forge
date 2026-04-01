@@ -28,6 +28,7 @@ interface FeishuDoc {
   manualContent?: string;
   modifiedTime?: string;
   lastGeneratedAt?: string;
+  isNew?: boolean;
 }
 
 interface BatchResult {
@@ -285,7 +286,7 @@ export default function SpokeGenerator() {
         token: data.token, name: data.name, type: "manual",
         content: data.content || undefined,
       });
-      setFeishuDocs((prev) => [{ token: data.token, name: data.name, type: "manual", manualContent: data.content || undefined }, ...prev]);
+      setFeishuDocs((prev) => [{ token: data.token, name: data.name, type: "manual", manualContent: data.content || undefined, isNew: true }, ...prev]);
       setSelectedDocs((prev) => [...prev, data.token]);
       toast({ title: "文档已创建并选中" });
     } catch (e: any) {
@@ -699,6 +700,7 @@ export default function SpokeGenerator() {
                         </Button>
                       }
                     />
+                    {doc.isNew && <Badge className="text-[10px] shrink-0 bg-primary text-primary-foreground">NEW</Badge>}
                     <Badge variant="outline" className="text-[10px] shrink-0">{doc.type}</Badge>
                   </label>
                 ))}

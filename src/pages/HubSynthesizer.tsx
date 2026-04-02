@@ -1,5 +1,5 @@
-import { useState, useEffect, useMemo } from "react";
-import { Network, ChevronRight, FileJson, Loader2 } from "lucide-react";
+import { useState, useEffect, useMemo, useRef } from "react";
+import { Network, ChevronRight, FileJson, Upload, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -34,6 +34,9 @@ export default function HubSynthesizer() {
     promptUsed: string;
   } | null>(null);
   const [confirmed, setConfirmed] = useState(false);
+  const [uploadedFiles, setUploadedFiles] = useState<{ name: string; content: string }[]>([]);
+  const [uploadedJsonTemplate, setUploadedJsonTemplate] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const parsedOutput = useMemo(() => {
     try { return output ? JSON.parse(output) : null; } catch { return null; }
@@ -53,11 +56,9 @@ export default function HubSynthesizer() {
     if (currentProject) savePromptConfig(currentProject.id, "hub", val);
   };
 
-  // Load all spokes when theme changes + auto-load component spec
   useEffect(() => {
     if (selectedTheme) {
       getSpokes(selectedTheme).then(setSpokes).catch(console.error);
-      // Auto-load component spec for this theme
       if (currentProject) {
         getComponentSpecsByTheme(currentProject.id, selectedTheme).then((themeSpecs: any[]) => {
           const hubSpec = themeSpecs.find((s: any) => s.type === "hub");
@@ -66,6 +67,35 @@ export default function HubSynthesizer() {
       }
     }
   }, [selectedTheme, currentProject]);
+
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files) return;
+    Array.from(files).forEach((file) => {
+      const reader = new FileReader();
+      reader.onload = (ev) => {
+        const text = ev.target?.result as string;
+        if (file.name.endsWith(".json")) {
+          setUploadedJsonTemplate(text);
+          toast({ title: `已加载 JSON 模板: ${file.name}` });
+        } else {
+          setUploadedFiles((prev) => [...prev, { name: file.name, content: text }]);
+          toast({ title: `已加载文件: ${file.name}` });
+        }
+      };
+      reader.readAsText(file);
+    });
+    e.target.value = "";
+  };
+
+  const removeUploadedFile = (index: number) => {
+    setUploadedFiles((prev) => prev.filter((_, i) => i !== index));
+  };
+
+  const removeJsonTemplate = () => {
+    setUploadedJsonTemplate(null);
+    toast({ title: "已移除 JSON 模板" });
+  };
 
   const handleGenerate = async () => {
     if (!selectedTheme) {
@@ -77,7 +107,6 @@ export default function HubSynthesizer() {
     setValidation("idle");
 
     try {
-      // 使用该主题下所有 Spoke 数据
       const spokeContent = JSON.stringify(
         spokes.map((s) => ({
           title: s.title,
@@ -88,11 +117,24 @@ export default function HubSynthesizer() {
         2
       );
 
+      // Build combined context: 补充内容 + uploaded file contents
+      const contextParts: string[] = [];
+      if (context.trim()) contextParts.push(context.trim());
+      for (const f of uploadedFiles) {
+        contextParts.push(`--- 上传文件: ${f.name} ---\n${f.content}`);
+      }
+
+      // Build custom prompt with JSON template priority
+      let finalPrompt = prompt || "";
+      if (uploadedJsonTemplate) {
+        finalPrompt += `\n\n【重要】用户提供了 JSON 模板，必须严格按照以下 JSON 结构和字段格式生成，仅替换内容：\n${uploadedJsonTemplate}`;
+      }
+
       const result = await generateJson({
         type: "hub",
         feishu_content: spokeContent,
-        custom_prompt: prompt || undefined,
-        context: context || undefined,
+        custom_prompt: finalPrompt || undefined,
+        context: contextParts.length > 0 ? contextParts.join("\n\n") : undefined,
       });
 
       const generatedJson = result.generated_json;
@@ -207,15 +249,56 @@ export default function HubSynthesizer() {
 
           <Card>
             <CardHeader className="pb-3">
-              <CardTitle className="text-base">补充 Hub 数据</CardTitle>
+              <CardTitle className="text-base">补充内容</CardTitle>
             </CardHeader>
-            <CardContent>
+            <CardContent className="space-y-3">
               <Textarea
-                placeholder="行业大背景、总体主题…"
+                placeholder="行业大背景、总体主题、额外补充信息…"
                 value={context}
                 onChange={(e) => setContext(e.target.value)}
                 className="min-h-[100px]"
               />
+              <div>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept=".txt,.md,.json,.csv"
+                  multiple
+                  className="hidden"
+                  onChange={handleFileUpload}
+                />
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="gap-1.5"
+                  onClick={() => fileInputRef.current?.click()}
+                >
+                  <Upload className="h-3.5 w-3.5" />
+                  上传文档
+                </Button>
+                <p className="text-xs text-muted-foreground mt-1">支持 .txt / .md / .json / .csv，JSON 文件将作为格式模板</p>
+              </div>
+              {uploadedJsonTemplate && (
+                <div className="flex items-center gap-2 p-2 rounded-md bg-primary/10 border border-primary/20">
+                  <FileJson className="h-3.5 w-3.5 text-primary" />
+                  <span className="text-xs font-medium">JSON 模板已加载</span>
+                  <Button variant="ghost" size="sm" className="h-5 w-5 p-0 ml-auto" onClick={removeJsonTemplate}>
+                    <X className="h-3 w-3" />
+                  </Button>
+                </div>
+              )}
+              {uploadedFiles.length > 0 && (
+                <div className="space-y-1">
+                  {uploadedFiles.map((f, i) => (
+                    <div key={i} className="flex items-center gap-2 text-xs p-1.5 rounded bg-muted/50">
+                      <span className="truncate flex-1">{f.name}</span>
+                      <Button variant="ghost" size="sm" className="h-5 w-5 p-0" onClick={() => removeUploadedFile(i)}>
+                        <X className="h-3 w-3" />
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+              )}
             </CardContent>
           </Card>
 

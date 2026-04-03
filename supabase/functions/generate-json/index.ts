@@ -363,7 +363,7 @@ Deno.serve(async (req) => {
       });
     }
 
-    const aiResult = await response.json();
+    const aiResult = await response!.json();
     let content = aiResult.choices?.[0]?.message?.content || '';
 
     // Robust JSON extraction from LLM response

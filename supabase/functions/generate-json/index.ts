@@ -342,7 +342,7 @@ Deno.serve(async (req) => {
       break;
     }
 
-    if (!response.ok) {
+    if (!response!.ok) {
       if (response.status === 429) {
         return new Response(JSON.stringify({ error: '请求频率超限，请稍后重试' }), {
           status: 429,

@@ -313,20 +313,34 @@ Deno.serve(async (req) => {
       if (context) userMessage += `\n\n补充上下文：${context}`;
     }
 
-    const response = await fetch('https://api.babelark.com/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${API_KEY}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        model: 'gemini-3.1-flash-lite-preview',
-        messages: [
-          { role: 'system', content: systemPrompt },
-          { role: 'user', content: userMessage },
-        ],
-      }),
-    });
+    const MAX_RETRIES = 3;
+    const RETRY_DELAYS = [2000, 5000, 10000];
+    let response: Response | null = null;
+
+    for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
+      response = await fetch('https://api.babelark.com/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${API_KEY}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          model: 'gemini-3.1-flash-lite-preview',
+          messages: [
+            { role: 'system', content: systemPrompt },
+            { role: 'user', content: userMessage },
+          ],
+        }),
+      });
+
+      if (response.status >= 500 && response.status <= 599 && attempt < MAX_RETRIES - 1) {
+        const errText = await response.text();
+        console.warn(`AI gateway returned ${response.status} on attempt ${attempt + 1}, retrying in ${RETRY_DELAYS[attempt]}ms...`, errText);
+        await new Promise(r => setTimeout(r, RETRY_DELAYS[attempt]));
+        continue;
+      }
+      break;
+    }
 
     if (!response.ok) {
       if (response.status === 429) {

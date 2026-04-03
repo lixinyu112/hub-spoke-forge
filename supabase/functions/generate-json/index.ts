@@ -313,43 +313,57 @@ Deno.serve(async (req) => {
       if (context) userMessage += `\n\n补充上下文：${context}`;
     }
 
-    const response = await fetch('https://api.babelark.com/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${API_KEY}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        model: 'gemini-3.1-flash-lite-preview',
-        messages: [
-          { role: 'system', content: systemPrompt },
-          { role: 'user', content: userMessage },
-        ],
-      }),
-    });
+    const MAX_RETRIES = 3;
+    const RETRY_DELAYS = [2000, 5000, 10000];
+    let response: Response | null = null;
 
-    if (!response.ok) {
-      if (response.status === 429) {
+    for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
+      response = await fetch('https://api.babelark.com/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${API_KEY}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          model: 'gemini-3.1-flash-lite-preview',
+          messages: [
+            { role: 'system', content: systemPrompt },
+            { role: 'user', content: userMessage },
+          ],
+        }),
+      });
+
+      if (response.status >= 500 && response.status <= 599 && attempt < MAX_RETRIES - 1) {
+        const errText = await response.text();
+        console.warn(`AI gateway returned ${response.status} on attempt ${attempt + 1}, retrying in ${RETRY_DELAYS[attempt]}ms...`, errText);
+        await new Promise(r => setTimeout(r, RETRY_DELAYS[attempt]));
+        continue;
+      }
+      break;
+    }
+
+    if (!response!.ok) {
+      if (response!.status === 429) {
         return new Response(JSON.stringify({ error: '请求频率超限，请稍后重试' }), {
           status: 429,
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         });
       }
-      if (response.status === 402) {
+      if (response!.status === 402) {
         return new Response(JSON.stringify({ error: 'AI 额度已用完，请充值' }), {
           status: 402,
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         });
       }
-      const errText = await response.text();
-      console.error('AI gateway error:', response.status, errText);
-      return new Response(JSON.stringify({ error: `AI 调用失败: ${response.status}` }), {
+      const errText = await response!.text();
+      console.error('AI gateway error:', response!.status, errText);
+      return new Response(JSON.stringify({ error: `AI 调用失败: ${response!.status}` }), {
         status: 500,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
 
-    const aiResult = await response.json();
+    const aiResult = await response!.json();
     let content = aiResult.choices?.[0]?.message?.content || '';
 
     // Robust JSON extraction from LLM response

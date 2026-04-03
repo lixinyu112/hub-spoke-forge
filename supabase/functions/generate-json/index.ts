@@ -343,21 +343,21 @@ Deno.serve(async (req) => {
     }
 
     if (!response!.ok) {
-      if (response.status === 429) {
+      if (response!.status === 429) {
         return new Response(JSON.stringify({ error: '请求频率超限，请稍后重试' }), {
           status: 429,
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         });
       }
-      if (response.status === 402) {
+      if (response!.status === 402) {
         return new Response(JSON.stringify({ error: 'AI 额度已用完，请充值' }), {
           status: 402,
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         });
       }
-      const errText = await response.text();
-      console.error('AI gateway error:', response.status, errText);
-      return new Response(JSON.stringify({ error: `AI 调用失败: ${response.status}` }), {
+      const errText = await response!.text();
+      console.error('AI gateway error:', response!.status, errText);
+      return new Response(JSON.stringify({ error: `AI 调用失败: ${response!.status}` }), {
         status: 500,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });

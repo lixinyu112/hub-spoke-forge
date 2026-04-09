@@ -139,18 +139,34 @@ export default function BlogProcessor() {
     const fileList = e.target.files;
     if (!fileList || fileList.length === 0) return;
 
+    const total = fileList.length;
     const newFiles: MdxFile[] = [];
     let processed = 0;
+
+    const onFileRead = () => {
+      processed++;
+      if (processed === total) {
+        if (newFiles.length > 0) {
+          setPendingMdxFiles((prev) => [...prev, ...newFiles]);
+          toast({ title: `已添加 ${newFiles.length} 个 MDX 文件` });
+        } else {
+          toast({ title: "未能读取任何文件", variant: "destructive" });
+        }
+      }
+    };
 
     Array.from(fileList).forEach((file) => {
       const reader = new FileReader();
       reader.onload = (ev) => {
-        newFiles.push({ name: file.name, content: ev.target?.result as string, size: file.size });
-        processed++;
-        if (processed === fileList.length) {
-          setPendingMdxFiles((prev) => [...prev, ...newFiles]);
-          toast({ title: `已添加 ${newFiles.length} 个 MDX 文件` });
+        const content = ev.target?.result as string;
+        if (content) {
+          newFiles.push({ name: file.name, content, size: file.size });
         }
+        onFileRead();
+      };
+      reader.onerror = () => {
+        console.error(`读取文件 ${file.name} 失败`);
+        onFileRead();
       };
       reader.readAsText(file);
     });

@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { FileText, FolderPlus, Trash2, Loader2, Globe, X, FileJson, ChevronRight, Package, Upload } from "lucide-react";
+import { FileText, FolderPlus, Trash2, Loader2, Globe, X, FileJson, ChevronRight, Upload, Eye } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -42,7 +42,6 @@ export default function BlogProcessor() {
 
   // Upload state
   const mdxInputRef = useRef<HTMLInputElement>(null);
-  const zipInputRef = useRef<HTMLInputElement>(null);
   const jsonTemplateRef = useRef<HTMLInputElement>(null);
   const [pendingMdxFiles, setPendingMdxFiles] = useState<MdxFile[]>([]);
   const [uploadedJsonTemplate, setUploadedJsonTemplate] = useState<string | null>(null);
@@ -61,6 +60,7 @@ export default function BlogProcessor() {
   const [selectedPost, setSelectedPost] = useState<BlogPost | null>(null);
   const [editingJson, setEditingJson] = useState("");
   const [validation, setValidation] = useState<"idle" | "passed" | "failed">("idle");
+  const [previewingMdx, setPreviewingMdx] = useState<MdxFile | null>(null);
 
   // Publish
   const [selectedPostIds, setSelectedPostIds] = useState<Set<string>>(new Set());

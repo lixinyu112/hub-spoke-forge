@@ -618,10 +618,27 @@ export default function BlogProcessor() {
             <Tabs defaultValue="json" className="flex-1 flex flex-col">
               <div className="border-b px-4">
                 <TabsList className="bg-transparent h-9">
+                  <TabsTrigger value="mdx" className="text-xs">MDX 原文</TabsTrigger>
                   <TabsTrigger value="json" className="text-xs">JSON 输出</TabsTrigger>
                   <TabsTrigger value="preview" className="text-xs">内容预览</TabsTrigger>
                 </TabsList>
               </div>
+              <TabsContent value="mdx" className="flex-1 m-0 overflow-auto">
+                {previewingMdx ? (
+                  <div className="p-4">
+                    <div className="flex items-center gap-2 mb-3">
+                      <FileText className="h-4 w-4 text-muted-foreground" />
+                      <span className="text-sm font-medium">{previewingMdx.name}</span>
+                      <span className="text-[10px] text-muted-foreground font-mono">
+                        {previewingMdx.size < 1024 ? `${previewingMdx.size}B` : `${(previewingMdx.size / 1024).toFixed(1)}KB`}
+                      </span>
+                    </div>
+                    <pre className="text-xs bg-muted/30 rounded-md p-3 overflow-auto whitespace-pre-wrap font-mono max-h-[500px]">{previewingMdx.content}</pre>
+                  </div>
+                ) : (
+                  <p className="text-sm text-muted-foreground text-center py-8">点击左侧 MDX 文件名预览原文内容</p>
+                )}
+              </TabsContent>
               <TabsContent value="json" className="flex-1 m-0">
                 <CodeViewer
                   code={editingJson}

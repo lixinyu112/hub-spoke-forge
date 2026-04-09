@@ -168,9 +168,7 @@ export default function BlogProcessor() {
         JSON.parse(text);
         setUploadedJsonTemplate(text);
         if (currentProject) {
-          setTemplateLoading(true);
           await savePromptConfig(currentProject.id, "blog_template", text);
-          setTemplateLoading(false);
         }
         toast({ title: `已加载 JSON 模板: ${file.name}` });
       } catch {

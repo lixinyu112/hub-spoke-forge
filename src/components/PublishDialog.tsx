@@ -135,6 +135,31 @@ export function PublishDialog({ open, onOpenChange, selectedCount, publishing, o
             </p>
           </div>
           <div>
+            <Label className="text-sm font-medium mb-2 block">发布环境</Label>
+            <div className="grid grid-cols-2 gap-2">
+              <label
+                className={`flex items-center gap-2 px-3 py-2 rounded-md border cursor-pointer transition-colors ${environment === "staging" ? "border-primary bg-primary/10" : "hover:bg-muted/50"}`}
+                onClick={() => setEnvironment("staging")}
+              >
+                <div className={`h-3 w-3 rounded-full border-2 ${environment === "staging" ? "border-primary bg-primary" : "border-muted-foreground"}`} />
+                <div>
+                  <span className="text-sm font-medium">Staging</span>
+                  <p className="text-[10px] text-muted-foreground">测试环境</p>
+                </div>
+              </label>
+              <label
+                className={`flex items-center gap-2 px-3 py-2 rounded-md border cursor-pointer transition-colors ${environment === "production" ? "border-primary bg-primary/10" : "hover:bg-muted/50"}`}
+                onClick={() => setEnvironment("production")}
+              >
+                <div className={`h-3 w-3 rounded-full border-2 ${environment === "production" ? "border-primary bg-primary" : "border-muted-foreground"}`} />
+                <div>
+                  <span className="text-sm font-medium">Production</span>
+                  <p className="text-[10px] text-muted-foreground">生产环境</p>
+                </div>
+              </label>
+            </div>
+          </div>
+          <div>
             <Label className="text-sm font-medium mb-2 block">选择发布语言</Label>
             <div className="grid grid-cols-1 gap-2">
               {LANGUAGES.map((lang) => (

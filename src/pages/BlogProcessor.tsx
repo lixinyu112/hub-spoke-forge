@@ -504,11 +504,6 @@ export default function BlogProcessor() {
                   <Upload className="h-3.5 w-3.5" />
                   上传 MDX 文件
                 </Button>
-                <input ref={zipInputRef} type="file" accept=".zip" className="hidden" onChange={handleZipUpload} />
-                <Button variant="outline" size="sm" className="gap-1.5" onClick={() => zipInputRef.current?.click()}>
-                  <Package className="h-3.5 w-3.5" />
-                  上传 ZIP 压缩包
-                </Button>
                 <input ref={jsonTemplateRef} type="file" accept=".json" className="hidden" onChange={handleJsonTemplateUpload} />
                 <Button variant="outline" size="sm" className="gap-1.5" onClick={() => jsonTemplateRef.current?.click()}>
                   <FileJson className="h-3.5 w-3.5" />

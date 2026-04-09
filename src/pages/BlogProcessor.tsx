@@ -145,7 +145,7 @@ export default function BlogProcessor() {
     Array.from(fileList).forEach((file) => {
       const reader = new FileReader();
       reader.onload = (ev) => {
-        newFiles.push({ name: file.name, content: ev.target?.result as string });
+        newFiles.push({ name: file.name, content: ev.target?.result as string, size: file.size });
         processed++;
         if (processed === fileList.length) {
           setPendingMdxFiles((prev) => [...prev, ...newFiles]);
@@ -154,38 +154,6 @@ export default function BlogProcessor() {
       };
       reader.readAsText(file);
     });
-    e.target.value = "";
-  };
-
-  // ZIP upload handler
-  const handleZipUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    try {
-      const JSZip = (await import("jszip")).default;
-      const zip = await JSZip.loadAsync(file);
-      const files: MdxFile[] = [];
-
-      for (const [path, entry] of Object.entries(zip.files)) {
-        if (entry.dir) continue;
-        if (path.endsWith(".mdx") || path.endsWith(".md")) {
-          const content = await entry.async("text");
-          const name = path.split("/").pop() || path;
-          files.push({ name, content });
-        }
-      }
-
-      if (files.length === 0) {
-        toast({ title: "压缩包中未找到 .mdx 或 .md 文件", variant: "destructive" });
-        return;
-      }
-
-      setPendingMdxFiles((prev) => [...prev, ...files]);
-      toast({ title: `已解析 ${files.length} 个 MDX 文件` });
-    } catch (err: any) {
-      toast({ title: "解压失败", description: err.message, variant: "destructive" });
-    }
     e.target.value = "";
   };
 

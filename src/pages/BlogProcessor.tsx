@@ -40,10 +40,12 @@ export default function BlogProcessor() {
   const [prompt, setPrompt] = useState("");
 
   // Upload state
+  const mdxInputRef = useRef<HTMLInputElement>(null);
   const zipInputRef = useRef<HTMLInputElement>(null);
   const jsonTemplateRef = useRef<HTMLInputElement>(null);
   const [pendingMdxFiles, setPendingMdxFiles] = useState<MdxFile[]>([]);
   const [uploadedJsonTemplate, setUploadedJsonTemplate] = useState<string | null>(null);
+  const [templateLoading, setTemplateLoading] = useState(false);
   const [context, setContext] = useState("");
 
   // Group creation

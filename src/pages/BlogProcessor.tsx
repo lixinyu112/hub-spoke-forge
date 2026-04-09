@@ -466,7 +466,7 @@ export default function BlogProcessor() {
             </CardHeader>
             <CardContent className="space-y-3">
               <div className="flex gap-2 flex-wrap">
-                <input ref={mdxInputRef} type="file" accept=".mdx,.md" multiple className="hidden" onChange={handleMdxUpload} />
+                <input ref={mdxInputRef} type="file" accept=".mdx,.md,.markdown,.txt" multiple className="hidden" onChange={handleMdxUpload} />
                 <Button variant="outline" size="sm" className="gap-1.5" onClick={() => mdxInputRef.current?.click()}>
                   <Upload className="h-3.5 w-3.5" />
                   上传 MDX 文件

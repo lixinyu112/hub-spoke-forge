@@ -11,7 +11,10 @@ const LANG_NAMES: Record<string, string> = {
   es: "Español", pt: "Português", ru: "Русский", de: "Deutsch", fr: "Français",
 };
 
-const CMS_BASE_URL = "https://cms.itripo3d.com";
+const CMS_URLS: Record<string, string> = {
+  staging: "https://cms-staging.itripo3d.com",
+  production: "https://cms.itripo3d.com",
+};
 const MAX_ARTICLES_PER_BATCH = 50;
 
 /**

@@ -154,7 +154,14 @@ export default function BlogProcessor() {
       setPendingMdxFiles(files);
       toast({ title: `已解析 ${files.length} 个 MDX 文件` });
     } catch (err: any) {
-      toast({ title: "解压失败", description: err.message, variant: "destructive" });
+      const isNonZip = !file.name.toLowerCase().endsWith(".zip");
+      toast({
+        title: "解压失败",
+        description: isNonZip
+          ? `暂不支持 ${file.name.split(".").pop()?.toUpperCase()} 格式，请转换为 ZIP 后重试`
+          : err.message,
+        variant: "destructive",
+      });
     }
     e.target.value = "";
   };
@@ -456,10 +463,10 @@ export default function BlogProcessor() {
             </CardHeader>
             <CardContent className="space-y-3">
               <div className="flex gap-2">
-                <input ref={zipInputRef} type="file" accept=".zip" className="hidden" onChange={handleZipUpload} />
+                <input ref={zipInputRef} type="file" accept=".zip,.rar,.7z,.tar,.tar.gz,.tgz" className="hidden" onChange={handleZipUpload} />
                 <Button variant="outline" size="sm" className="gap-1.5" onClick={() => zipInputRef.current?.click()}>
                   <Package className="h-3.5 w-3.5" />
-                  上传 ZIP 压缩包
+                  上传压缩包
                 </Button>
                 <input ref={jsonTemplateRef} type="file" accept=".json" className="hidden" onChange={handleJsonTemplateUpload} />
                 <Button variant="outline" size="sm" className="gap-1.5" onClick={() => jsonTemplateRef.current?.click()}>

@@ -1,5 +1,5 @@
-import { useState, useEffect, useRef, useMemo } from "react";
-import { FileText, Upload, FolderPlus, Trash2, Loader2, Globe, X, FileJson, ChevronRight, Package } from "lucide-react";
+import { useState, useEffect, useRef } from "react";
+import { FileText, FolderPlus, Trash2, Loader2, Globe, X, FileJson, ChevronRight, Package } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -36,7 +36,7 @@ export default function BlogProcessor() {
   const [groups, setGroups] = useState<BlogGroup[]>([]);
   const [selectedGroup, setSelectedGroup] = useState<string>("all");
   const [posts, setPosts] = useState<BlogPost[]>([]);
-  const [loading, setLoading] = useState(false);
+  
   const [prompt, setPrompt] = useState("");
 
   // Upload state
@@ -282,7 +282,7 @@ export default function BlogProcessor() {
   const togglePostSelection = (id: string) => {
     setSelectedPostIds((prev) => {
       const next = new Set(prev);
-      next.has(id) ? next.delete(id) : next.add(id);
+      if (next.has(id)) next.delete(id); else next.add(id);
       return next;
     });
   };

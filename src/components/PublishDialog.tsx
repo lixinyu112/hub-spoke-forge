@@ -30,13 +30,14 @@ interface PublishDialogProps {
   onOpenChange: (open: boolean) => void;
   selectedCount: number;
   publishing: boolean;
-  onPublish: (languages: string[]) => void;
+  onPublish: (languages: string[], environment: string) => void;
   report?: PublishReportData | null;
   progress?: { total: number; done: number } | null;
 }
 
 export function PublishDialog({ open, onOpenChange, selectedCount, publishing, onPublish, report, progress }: PublishDialogProps) {
   const [selectedLangs, setSelectedLangs] = useState<Set<string>>(new Set(["zh"]));
+  const [environment, setEnvironment] = useState<string>("staging");
 
   const toggleLang = (code: string) => {
     setSelectedLangs((prev) => {
@@ -48,7 +49,7 @@ export function PublishDialog({ open, onOpenChange, selectedCount, publishing, o
 
   const handlePublish = () => {
     if (selectedLangs.size === 0) return;
-    onPublish(Array.from(selectedLangs));
+    onPublish(Array.from(selectedLangs), environment);
   };
 
   // Show report view when report is available

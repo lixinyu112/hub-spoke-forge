@@ -76,6 +76,10 @@ export default function BlogProcessor() {
       loadPromptConfig(currentProject.id, "blog").then((saved) => {
         if (saved) setPrompt(saved);
       });
+      // Load persisted JSON template
+      loadPromptConfig(currentProject.id, "blog_template").then((saved) => {
+        if (saved) setUploadedJsonTemplate(saved);
+      });
     }
   }, [currentProject]);
 

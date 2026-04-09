@@ -29,6 +29,7 @@ import { toast } from "@/hooks/use-toast";
 interface MdxFile {
   name: string;
   content: string;
+  size: number;
 }
 
 export default function BlogProcessor() {

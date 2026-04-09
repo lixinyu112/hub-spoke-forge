@@ -488,22 +488,35 @@ export default function BlogProcessor() {
                 </div>
               )}
 
-              {pendingMdxFiles.length > 0 && (
-                <div className="space-y-1">
-                  <p className="text-xs text-muted-foreground">待处理文件（{pendingMdxFiles.length} 个）：</p>
-                  <ScrollArea className="max-h-[120px]">
+              <div className="space-y-1">
+                <p className="text-xs text-muted-foreground">
+                  {pendingMdxFiles.length > 0
+                    ? `待处理文件（${pendingMdxFiles.length} 个）：`
+                    : "暂无上传文件，请点击上方按钮选择 MDX 文件"}
+                </p>
+                {pendingMdxFiles.length > 0 && (
+                  <ScrollArea className="max-h-[150px]">
                     {pendingMdxFiles.map((f, i) => (
-                      <div key={i} className="flex items-center gap-2 text-xs p-1.5 rounded bg-muted/50">
-                        <FileText className="h-3 w-3 text-muted-foreground" />
+                      <div
+                        key={i}
+                        className={`flex items-center gap-2 text-xs p-1.5 rounded cursor-pointer transition-colors ${
+                          previewingMdx === f ? "bg-primary/10 border border-primary/30" : "bg-muted/50 hover:bg-muted"
+                        }`}
+                        onClick={() => setPreviewingMdx(f)}
+                      >
+                        <FileText className="h-3 w-3 text-muted-foreground shrink-0" />
                         <span className="truncate flex-1">{f.name}</span>
-                        <Button variant="ghost" size="sm" className="h-5 w-5 p-0" onClick={() => setPendingMdxFiles((prev) => prev.filter((_, j) => j !== i))}>
+                        <span className="text-[10px] text-muted-foreground font-mono shrink-0">
+                          {f.size < 1024 ? `${f.size}B` : `${(f.size / 1024).toFixed(1)}KB`}
+                        </span>
+                        <Button variant="ghost" size="sm" className="h-5 w-5 p-0 shrink-0" onClick={(e) => { e.stopPropagation(); setPendingMdxFiles((prev) => prev.filter((_, j) => j !== i)); if (previewingMdx === f) setPreviewingMdx(null); }}>
                           <X className="h-3 w-3" />
                         </Button>
                       </div>
                     ))}
                   </ScrollArea>
-                </div>
-              )}
+                )}
+              </div>
 
               <Textarea
                 placeholder="补充内容（可选）：额外的转换指令或上下文…"

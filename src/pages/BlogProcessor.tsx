@@ -212,6 +212,15 @@ export default function BlogProcessor() {
     e.target.value = "";
   };
 
+  // Delete persisted JSON template
+  const handleDeleteTemplate = async () => {
+    setUploadedJsonTemplate(null);
+    if (currentProject) {
+      await savePromptConfig(currentProject.id, "blog_template", "");
+    }
+    toast({ title: "JSON 模板已删除" });
+  };
+
   // Batch process MDX files
   const handleProcessAll = async () => {
     if (!currentProject || pendingMdxFiles.length === 0) return;

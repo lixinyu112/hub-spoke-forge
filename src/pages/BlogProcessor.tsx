@@ -288,7 +288,7 @@ export default function BlogProcessor() {
   };
 
   // Publish via Blog Import API
-  const handlePublish = async (languages: string[]) => {
+  const handlePublish = async (languages: string[], environment: string) => {
     if (!currentProject || selectedPostIds.size === 0) return;
     setPublishing(true);
     setPublishReport(null);
@@ -315,6 +315,7 @@ export default function BlogProcessor() {
           languages,
           translate_prompt: translatePrompt || undefined,
           slug_prefix: "crescendia",
+          environment,
         },
       });
 

@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { FileText, FolderPlus, Trash2, Loader2, Globe, X, FileJson, ChevronRight, Package, Upload } from "lucide-react";
+import { FileText, FolderPlus, Trash2, Loader2, Globe, X, FileJson, ChevronRight, Upload } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -29,6 +29,7 @@ import { toast } from "@/hooks/use-toast";
 interface MdxFile {
   name: string;
   content: string;
+  size: number;
 }
 
 export default function BlogProcessor() {
@@ -41,11 +42,10 @@ export default function BlogProcessor() {
 
   // Upload state
   const mdxInputRef = useRef<HTMLInputElement>(null);
-  const zipInputRef = useRef<HTMLInputElement>(null);
   const jsonTemplateRef = useRef<HTMLInputElement>(null);
   const [pendingMdxFiles, setPendingMdxFiles] = useState<MdxFile[]>([]);
   const [uploadedJsonTemplate, setUploadedJsonTemplate] = useState<string | null>(null);
-  const [templateLoading, setTemplateLoading] = useState(false);
+  
   const [context, setContext] = useState("");
 
   // Group creation
@@ -60,6 +60,7 @@ export default function BlogProcessor() {
   const [selectedPost, setSelectedPost] = useState<BlogPost | null>(null);
   const [editingJson, setEditingJson] = useState("");
   const [validation, setValidation] = useState<"idle" | "passed" | "failed">("idle");
+  const [previewingMdx, setPreviewingMdx] = useState<MdxFile | null>(null);
 
   // Publish
   const [selectedPostIds, setSelectedPostIds] = useState<Set<string>>(new Set());
@@ -144,7 +145,7 @@ export default function BlogProcessor() {
     Array.from(fileList).forEach((file) => {
       const reader = new FileReader();
       reader.onload = (ev) => {
-        newFiles.push({ name: file.name, content: ev.target?.result as string });
+        newFiles.push({ name: file.name, content: ev.target?.result as string, size: file.size });
         processed++;
         if (processed === fileList.length) {
           setPendingMdxFiles((prev) => [...prev, ...newFiles]);
@@ -153,38 +154,6 @@ export default function BlogProcessor() {
       };
       reader.readAsText(file);
     });
-    e.target.value = "";
-  };
-
-  // ZIP upload handler
-  const handleZipUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    try {
-      const JSZip = (await import("jszip")).default;
-      const zip = await JSZip.loadAsync(file);
-      const files: MdxFile[] = [];
-
-      for (const [path, entry] of Object.entries(zip.files)) {
-        if (entry.dir) continue;
-        if (path.endsWith(".mdx") || path.endsWith(".md")) {
-          const content = await entry.async("text");
-          const name = path.split("/").pop() || path;
-          files.push({ name, content });
-        }
-      }
-
-      if (files.length === 0) {
-        toast({ title: "压缩包中未找到 .mdx 或 .md 文件", variant: "destructive" });
-        return;
-      }
-
-      setPendingMdxFiles((prev) => [...prev, ...files]);
-      toast({ title: `已解析 ${files.length} 个 MDX 文件` });
-    } catch (err: any) {
-      toast({ title: "解压失败", description: err.message, variant: "destructive" });
-    }
     e.target.value = "";
   };
 
@@ -199,9 +168,7 @@ export default function BlogProcessor() {
         JSON.parse(text);
         setUploadedJsonTemplate(text);
         if (currentProject) {
-          setTemplateLoading(true);
           await savePromptConfig(currentProject.id, "blog_template", text);
-          setTemplateLoading(false);
         }
         toast({ title: `已加载 JSON 模板: ${file.name}` });
       } catch {
@@ -521,22 +488,35 @@ export default function BlogProcessor() {
                 </div>
               )}
 
-              {pendingMdxFiles.length > 0 && (
-                <div className="space-y-1">
-                  <p className="text-xs text-muted-foreground">待处理文件（{pendingMdxFiles.length} 个）：</p>
-                  <ScrollArea className="max-h-[120px]">
+              <div className="space-y-1">
+                <p className="text-xs text-muted-foreground">
+                  {pendingMdxFiles.length > 0
+                    ? `待处理文件（${pendingMdxFiles.length} 个）：`
+                    : "暂无上传文件，请点击上方按钮选择 MDX 文件"}
+                </p>
+                {pendingMdxFiles.length > 0 && (
+                  <ScrollArea className="max-h-[150px]">
                     {pendingMdxFiles.map((f, i) => (
-                      <div key={i} className="flex items-center gap-2 text-xs p-1.5 rounded bg-muted/50">
-                        <FileText className="h-3 w-3 text-muted-foreground" />
+                      <div
+                        key={i}
+                        className={`flex items-center gap-2 text-xs p-1.5 rounded cursor-pointer transition-colors ${
+                          previewingMdx === f ? "bg-primary/10 border border-primary/30" : "bg-muted/50 hover:bg-muted"
+                        }`}
+                        onClick={() => setPreviewingMdx(f)}
+                      >
+                        <FileText className="h-3 w-3 text-muted-foreground shrink-0" />
                         <span className="truncate flex-1">{f.name}</span>
-                        <Button variant="ghost" size="sm" className="h-5 w-5 p-0" onClick={() => setPendingMdxFiles((prev) => prev.filter((_, j) => j !== i))}>
+                        <span className="text-[10px] text-muted-foreground font-mono shrink-0">
+                          {f.size < 1024 ? `${f.size}B` : `${(f.size / 1024).toFixed(1)}KB`}
+                        </span>
+                        <Button variant="ghost" size="sm" className="h-5 w-5 p-0 shrink-0" onClick={(e) => { e.stopPropagation(); setPendingMdxFiles((prev) => prev.filter((_, j) => j !== i)); if (previewingMdx === f) setPreviewingMdx(null); }}>
                           <X className="h-3 w-3" />
                         </Button>
                       </div>
                     ))}
                   </ScrollArea>
-                </div>
-              )}
+                )}
+              </div>
 
               <Textarea
                 placeholder="补充内容（可选）：额外的转换指令或上下文…"
@@ -638,10 +618,27 @@ export default function BlogProcessor() {
             <Tabs defaultValue="json" className="flex-1 flex flex-col">
               <div className="border-b px-4">
                 <TabsList className="bg-transparent h-9">
+                  <TabsTrigger value="mdx" className="text-xs">MDX 原文</TabsTrigger>
                   <TabsTrigger value="json" className="text-xs">JSON 输出</TabsTrigger>
                   <TabsTrigger value="preview" className="text-xs">内容预览</TabsTrigger>
                 </TabsList>
               </div>
+              <TabsContent value="mdx" className="flex-1 m-0 overflow-auto">
+                {previewingMdx ? (
+                  <div className="p-4">
+                    <div className="flex items-center gap-2 mb-3">
+                      <FileText className="h-4 w-4 text-muted-foreground" />
+                      <span className="text-sm font-medium">{previewingMdx.name}</span>
+                      <span className="text-[10px] text-muted-foreground font-mono">
+                        {previewingMdx.size < 1024 ? `${previewingMdx.size}B` : `${(previewingMdx.size / 1024).toFixed(1)}KB`}
+                      </span>
+                    </div>
+                    <pre className="text-xs bg-muted/30 rounded-md p-3 overflow-auto whitespace-pre-wrap font-mono max-h-[500px]">{previewingMdx.content}</pre>
+                  </div>
+                ) : (
+                  <p className="text-sm text-muted-foreground text-center py-8">点击左侧 MDX 文件名预览原文内容</p>
+                )}
+              </TabsContent>
               <TabsContent value="json" className="flex-1 m-0">
                 <CodeViewer
                   code={editingJson}

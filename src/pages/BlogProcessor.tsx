@@ -133,6 +133,29 @@ export default function BlogProcessor() {
     }
   };
 
+  // MDX multi-file upload handler
+  const handleMdxUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const fileList = e.target.files;
+    if (!fileList || fileList.length === 0) return;
+
+    const newFiles: MdxFile[] = [];
+    let processed = 0;
+
+    Array.from(fileList).forEach((file) => {
+      const reader = new FileReader();
+      reader.onload = (ev) => {
+        newFiles.push({ name: file.name, content: ev.target?.result as string });
+        processed++;
+        if (processed === fileList.length) {
+          setPendingMdxFiles((prev) => [...prev, ...newFiles]);
+          toast({ title: `已添加 ${newFiles.length} 个 MDX 文件` });
+        }
+      };
+      reader.readAsText(file);
+    });
+    e.target.value = "";
+  };
+
   // ZIP upload handler
   const handleZipUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -157,31 +180,29 @@ export default function BlogProcessor() {
         return;
       }
 
-      setPendingMdxFiles(files);
+      setPendingMdxFiles((prev) => [...prev, ...files]);
       toast({ title: `已解析 ${files.length} 个 MDX 文件` });
     } catch (err: any) {
-      const isNonZip = !file.name.toLowerCase().endsWith(".zip");
-      toast({
-        title: "解压失败",
-        description: isNonZip
-          ? `暂不支持 ${file.name.split(".").pop()?.toUpperCase()} 格式，请转换为 ZIP 后重试`
-          : err.message,
-        variant: "destructive",
-      });
+      toast({ title: "解压失败", description: err.message, variant: "destructive" });
     }
     e.target.value = "";
   };
 
-  // JSON template upload
+  // JSON template upload with persistence
   const handleJsonTemplateUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
     const reader = new FileReader();
-    reader.onload = (ev) => {
+    reader.onload = async (ev) => {
       const text = ev.target?.result as string;
       try {
         JSON.parse(text);
         setUploadedJsonTemplate(text);
+        if (currentProject) {
+          setTemplateLoading(true);
+          await savePromptConfig(currentProject.id, "blog_template", text);
+          setTemplateLoading(false);
+        }
         toast({ title: `已加载 JSON 模板: ${file.name}` });
       } catch {
         toast({ title: "无效的 JSON 文件", variant: "destructive" });

@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { FileText, FolderPlus, Trash2, Loader2, Globe, X, FileJson, ChevronRight, Package } from "lucide-react";
+import { FileText, FolderPlus, Trash2, Loader2, Globe, X, FileJson, ChevronRight, Package, Upload } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -40,10 +40,12 @@ export default function BlogProcessor() {
   const [prompt, setPrompt] = useState("");
 
   // Upload state
+  const mdxInputRef = useRef<HTMLInputElement>(null);
   const zipInputRef = useRef<HTMLInputElement>(null);
   const jsonTemplateRef = useRef<HTMLInputElement>(null);
   const [pendingMdxFiles, setPendingMdxFiles] = useState<MdxFile[]>([]);
   const [uploadedJsonTemplate, setUploadedJsonTemplate] = useState<string | null>(null);
+  const [templateLoading, setTemplateLoading] = useState(false);
   const [context, setContext] = useState("");
 
   // Group creation
@@ -73,6 +75,10 @@ export default function BlogProcessor() {
       loadPosts();
       loadPromptConfig(currentProject.id, "blog").then((saved) => {
         if (saved) setPrompt(saved);
+      });
+      // Load persisted JSON template
+      loadPromptConfig(currentProject.id, "blog_template").then((saved) => {
+        if (saved) setUploadedJsonTemplate(saved);
       });
     }
   }, [currentProject]);
@@ -127,6 +133,29 @@ export default function BlogProcessor() {
     }
   };
 
+  // MDX multi-file upload handler
+  const handleMdxUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const fileList = e.target.files;
+    if (!fileList || fileList.length === 0) return;
+
+    const newFiles: MdxFile[] = [];
+    let processed = 0;
+
+    Array.from(fileList).forEach((file) => {
+      const reader = new FileReader();
+      reader.onload = (ev) => {
+        newFiles.push({ name: file.name, content: ev.target?.result as string });
+        processed++;
+        if (processed === fileList.length) {
+          setPendingMdxFiles((prev) => [...prev, ...newFiles]);
+          toast({ title: `已添加 ${newFiles.length} 个 MDX 文件` });
+        }
+      };
+      reader.readAsText(file);
+    });
+    e.target.value = "";
+  };
+
   // ZIP upload handler
   const handleZipUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -151,31 +180,29 @@ export default function BlogProcessor() {
         return;
       }
 
-      setPendingMdxFiles(files);
+      setPendingMdxFiles((prev) => [...prev, ...files]);
       toast({ title: `已解析 ${files.length} 个 MDX 文件` });
     } catch (err: any) {
-      const isNonZip = !file.name.toLowerCase().endsWith(".zip");
-      toast({
-        title: "解压失败",
-        description: isNonZip
-          ? `暂不支持 ${file.name.split(".").pop()?.toUpperCase()} 格式，请转换为 ZIP 后重试`
-          : err.message,
-        variant: "destructive",
-      });
+      toast({ title: "解压失败", description: err.message, variant: "destructive" });
     }
     e.target.value = "";
   };
 
-  // JSON template upload
+  // JSON template upload with persistence
   const handleJsonTemplateUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
     const reader = new FileReader();
-    reader.onload = (ev) => {
+    reader.onload = async (ev) => {
       const text = ev.target?.result as string;
       try {
         JSON.parse(text);
         setUploadedJsonTemplate(text);
+        if (currentProject) {
+          setTemplateLoading(true);
+          await savePromptConfig(currentProject.id, "blog_template", text);
+          setTemplateLoading(false);
+        }
         toast({ title: `已加载 JSON 模板: ${file.name}` });
       } catch {
         toast({ title: "无效的 JSON 文件", variant: "destructive" });
@@ -183,6 +210,15 @@ export default function BlogProcessor() {
     };
     reader.readAsText(file);
     e.target.value = "";
+  };
+
+  // Delete persisted JSON template
+  const handleDeleteTemplate = async () => {
+    setUploadedJsonTemplate(null);
+    if (currentProject) {
+      await savePromptConfig(currentProject.id, "blog_template", "");
+    }
+    toast({ title: "JSON 模板已删除" });
   };
 
   // Batch process MDX files
@@ -462,25 +498,30 @@ export default function BlogProcessor() {
               <CardTitle className="text-base">上传与转换</CardTitle>
             </CardHeader>
             <CardContent className="space-y-3">
-              <div className="flex gap-2">
-                <input ref={zipInputRef} type="file" accept=".zip,.rar,.7z,.tar,.tar.gz,.tgz" className="hidden" onChange={handleZipUpload} />
+              <div className="flex gap-2 flex-wrap">
+                <input ref={mdxInputRef} type="file" accept=".mdx,.md" multiple className="hidden" onChange={handleMdxUpload} />
+                <Button variant="outline" size="sm" className="gap-1.5" onClick={() => mdxInputRef.current?.click()}>
+                  <Upload className="h-3.5 w-3.5" />
+                  上传 MDX 文件
+                </Button>
+                <input ref={zipInputRef} type="file" accept=".zip" className="hidden" onChange={handleZipUpload} />
                 <Button variant="outline" size="sm" className="gap-1.5" onClick={() => zipInputRef.current?.click()}>
                   <Package className="h-3.5 w-3.5" />
-                  上传压缩包
+                  上传 ZIP 压缩包
                 </Button>
                 <input ref={jsonTemplateRef} type="file" accept=".json" className="hidden" onChange={handleJsonTemplateUpload} />
                 <Button variant="outline" size="sm" className="gap-1.5" onClick={() => jsonTemplateRef.current?.click()}>
                   <FileJson className="h-3.5 w-3.5" />
-                  上传 JSON 模板
+                  {uploadedJsonTemplate ? "更换 JSON 模板" : "上传 JSON 模板"}
                 </Button>
               </div>
 
               {uploadedJsonTemplate && (
                 <div className="flex items-center gap-2 p-2 rounded-md bg-primary/10 border border-primary/20">
                   <FileJson className="h-3.5 w-3.5 text-primary" />
-                  <span className="text-xs font-medium">JSON 模板已加载</span>
-                  <Button variant="ghost" size="sm" className="h-5 w-5 p-0 ml-auto" onClick={() => setUploadedJsonTemplate(null)}>
-                    <X className="h-3 w-3" />
+                  <span className="text-xs font-medium">JSON 模板已加载（已持久化）</span>
+                  <Button variant="ghost" size="sm" className="h-5 w-5 p-0 ml-auto" onClick={handleDeleteTemplate}>
+                    <Trash2 className="h-3 w-3 text-muted-foreground hover:text-destructive" />
                   </Button>
                 </div>
               )}

@@ -11,7 +11,10 @@ const LANG_NAMES: Record<string, string> = {
   es: "Español", pt: "Português", ru: "Русский", de: "Deutsch", fr: "Français",
 };
 
-const CMS_BASE_URL = "https://cms.itripo3d.com";
+const CMS_URLS: Record<string, string> = {
+  staging: "https://cms-staging.itripo3d.com",
+  production: "https://cms.itripo3d.com",
+};
 const MAX_ARTICLES_PER_BATCH = 50;
 
 /**
@@ -111,7 +114,7 @@ serve(async (req) => {
   }
 
   try {
-    const { items, languages, translate_prompt, slug_prefix } = await req.json();
+    const { items, languages, translate_prompt, slug_prefix, environment } = await req.json();
 
     if (!items?.length || !languages?.length) {
       return new Response(
@@ -154,7 +157,8 @@ serve(async (req) => {
         const articles = batch.map((b) => b.article);
 
         try {
-          const resp = await fetch(`${CMS_BASE_URL}/api/blog-import`, {
+          const cmsBaseUrl = CMS_URLS[environment] || CMS_URLS.production;
+          const resp = await fetch(`${cmsBaseUrl}/api/blog-import`, {
             method: "POST",
             headers: {
               "Authorization": `users API-Key ${apiKey}`,

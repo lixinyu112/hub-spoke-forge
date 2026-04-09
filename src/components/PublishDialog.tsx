@@ -7,6 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 
+
 const LANGUAGES = [
   { code: "zh", label: "简体中文 (Simplified Chinese)" },
   { code: "en", label: "English" },
@@ -29,13 +30,14 @@ interface PublishDialogProps {
   onOpenChange: (open: boolean) => void;
   selectedCount: number;
   publishing: boolean;
-  onPublish: (languages: string[]) => void;
+  onPublish: (languages: string[], environment: string) => void;
   report?: PublishReportData | null;
   progress?: { total: number; done: number } | null;
 }
 
 export function PublishDialog({ open, onOpenChange, selectedCount, publishing, onPublish, report, progress }: PublishDialogProps) {
   const [selectedLangs, setSelectedLangs] = useState<Set<string>>(new Set(["zh"]));
+  const [environment, setEnvironment] = useState<string>("staging");
 
   const toggleLang = (code: string) => {
     setSelectedLangs((prev) => {
@@ -47,7 +49,7 @@ export function PublishDialog({ open, onOpenChange, selectedCount, publishing, o
 
   const handlePublish = () => {
     if (selectedLangs.size === 0) return;
-    onPublish(Array.from(selectedLangs));
+    onPublish(Array.from(selectedLangs), environment);
   };
 
   // Show report view when report is available
@@ -131,6 +133,31 @@ export function PublishDialog({ open, onOpenChange, selectedCount, publishing, o
             <p className="text-sm text-muted-foreground">
               已选择 <Badge variant="secondary">{selectedCount}</Badge> 个内容项
             </p>
+          </div>
+          <div>
+            <Label className="text-sm font-medium mb-2 block">发布环境</Label>
+            <div className="grid grid-cols-2 gap-2">
+              <label
+                className={`flex items-center gap-2 px-3 py-2 rounded-md border cursor-pointer transition-colors ${environment === "staging" ? "border-primary bg-primary/10" : "hover:bg-muted/50"}`}
+                onClick={() => setEnvironment("staging")}
+              >
+                <div className={`h-3 w-3 rounded-full border-2 ${environment === "staging" ? "border-primary bg-primary" : "border-muted-foreground"}`} />
+                <div>
+                  <span className="text-sm font-medium">Staging</span>
+                  <p className="text-[10px] text-muted-foreground">测试环境</p>
+                </div>
+              </label>
+              <label
+                className={`flex items-center gap-2 px-3 py-2 rounded-md border cursor-pointer transition-colors ${environment === "production" ? "border-primary bg-primary/10" : "hover:bg-muted/50"}`}
+                onClick={() => setEnvironment("production")}
+              >
+                <div className={`h-3 w-3 rounded-full border-2 ${environment === "production" ? "border-primary bg-primary" : "border-muted-foreground"}`} />
+                <div>
+                  <span className="text-sm font-medium">Production</span>
+                  <p className="text-[10px] text-muted-foreground">生产环境</p>
+                </div>
+              </label>
+            </div>
           </div>
           <div>
             <Label className="text-sm font-medium mb-2 block">选择发布语言</Label>

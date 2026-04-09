@@ -7,6 +7,7 @@ import { ProjectProvider } from "@/contexts/ProjectContext";
 import ComponentSpecs from "@/pages/ComponentSpecs";
 import SpokeGenerator from "@/pages/SpokeGenerator";
 import HubSynthesizer from "@/pages/HubSynthesizer";
+import BlogProcessor from "@/pages/BlogProcessor";
 import ContentBrowser from "@/pages/ContentBrowser";
 import NotFound from "@/pages/NotFound";
 
@@ -23,6 +24,7 @@ const App = () => (
               <Route path="/" element={<ComponentSpecs />} />
               <Route path="/spoke-generator" element={<SpokeGenerator />} />
               <Route path="/hub-synthesizer" element={<HubSynthesizer />} />
+              <Route path="/blog-processor" element={<BlogProcessor />} />
               <Route path="/browser" element={<ContentBrowser />} />
               <Route path="*" element={<NotFound />} />
             </Routes>

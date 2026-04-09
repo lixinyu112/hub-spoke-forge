@@ -45,7 +45,7 @@ export default function BlogProcessor() {
   const jsonTemplateRef = useRef<HTMLInputElement>(null);
   const [pendingMdxFiles, setPendingMdxFiles] = useState<MdxFile[]>([]);
   const [uploadedJsonTemplate, setUploadedJsonTemplate] = useState<string | null>(null);
-  const [templateLoading, setTemplateLoading] = useState(false);
+  
   const [context, setContext] = useState("");
 
   // Group creation

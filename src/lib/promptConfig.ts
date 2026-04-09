@@ -1,6 +1,6 @@
 import { supabase } from "@/integrations/supabase/client";
 
-export type PageType = "spoke" | "hub" | "translate";
+export type PageType = "spoke" | "hub" | "translate" | "blog";
 
 /**
  * Load prompt config for a given project + page type

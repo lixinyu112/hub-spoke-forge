@@ -498,25 +498,30 @@ export default function BlogProcessor() {
               <CardTitle className="text-base">上传与转换</CardTitle>
             </CardHeader>
             <CardContent className="space-y-3">
-              <div className="flex gap-2">
-                <input ref={zipInputRef} type="file" accept=".zip,.rar,.7z,.tar,.tar.gz,.tgz" className="hidden" onChange={handleZipUpload} />
+              <div className="flex gap-2 flex-wrap">
+                <input ref={mdxInputRef} type="file" accept=".mdx,.md" multiple className="hidden" onChange={handleMdxUpload} />
+                <Button variant="outline" size="sm" className="gap-1.5" onClick={() => mdxInputRef.current?.click()}>
+                  <Upload className="h-3.5 w-3.5" />
+                  上传 MDX 文件
+                </Button>
+                <input ref={zipInputRef} type="file" accept=".zip" className="hidden" onChange={handleZipUpload} />
                 <Button variant="outline" size="sm" className="gap-1.5" onClick={() => zipInputRef.current?.click()}>
                   <Package className="h-3.5 w-3.5" />
-                  上传压缩包
+                  上传 ZIP 压缩包
                 </Button>
                 <input ref={jsonTemplateRef} type="file" accept=".json" className="hidden" onChange={handleJsonTemplateUpload} />
                 <Button variant="outline" size="sm" className="gap-1.5" onClick={() => jsonTemplateRef.current?.click()}>
                   <FileJson className="h-3.5 w-3.5" />
-                  上传 JSON 模板
+                  {uploadedJsonTemplate ? "更换 JSON 模板" : "上传 JSON 模板"}
                 </Button>
               </div>
 
               {uploadedJsonTemplate && (
                 <div className="flex items-center gap-2 p-2 rounded-md bg-primary/10 border border-primary/20">
                   <FileJson className="h-3.5 w-3.5 text-primary" />
-                  <span className="text-xs font-medium">JSON 模板已加载</span>
-                  <Button variant="ghost" size="sm" className="h-5 w-5 p-0 ml-auto" onClick={() => setUploadedJsonTemplate(null)}>
-                    <X className="h-3 w-3" />
+                  <span className="text-xs font-medium">JSON 模板已加载（已持久化）</span>
+                  <Button variant="ghost" size="sm" className="h-5 w-5 p-0 ml-auto" onClick={handleDeleteTemplate}>
+                    <Trash2 className="h-3 w-3 text-muted-foreground hover:text-destructive" />
                   </Button>
                 </div>
               )}

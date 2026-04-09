@@ -287,7 +287,7 @@ export default function BlogProcessor() {
     });
   };
 
-  // Publish
+  // Publish via Blog Import API
   const handlePublish = async (languages: string[]) => {
     if (!currentProject || selectedPostIds.size === 0) return;
     setPublishing(true);
@@ -295,66 +295,67 @@ export default function BlogProcessor() {
 
     const selectedPosts = posts.filter((p) => selectedPostIds.has(p.id) && p.json_data && !p.json_data.error);
     const total = selectedPosts.length * languages.length;
-    let done = 0;
     const details: PublishReportData["details"] = [];
 
-    setPublishProgress({ total, done });
+    setPublishProgress({ total, done: 0 });
 
-    for (const post of selectedPosts) {
-      for (const lang of languages) {
-        try {
-          let jsonToPublish = post.json_data;
+    try {
+      // Load translate prompt once
+      const translatePrompt = await loadPromptConfig(currentProject.id, "translate");
 
-          // Translate if not zh
-          if (lang !== "zh") {
-            try {
-              const translatePrompt = await loadPromptConfig(currentProject.id, "translate");
-              const { data } = await supabase.functions.invoke("generate-json", {
-                body: {
-                  type: "spoke",
-                  feishu_content: JSON.stringify(post.json_data),
-                  custom_prompt: translatePrompt || `请将以下 JSON 中的所有文案内容翻译为 ${lang} 语言，保持 JSON 结构和字段名不变，只翻译值中的文案。`,
-                  context: `目标语言: ${lang}`,
-                },
-              });
-              if (data?.generated_json) jsonToPublish = data.generated_json;
-            } catch (e) {
-              console.warn(`翻译 ${lang} 失败，使用原始内容:`, e);
-            }
-          }
+      // Call publish-blog edge function which handles translation + CMS push
+      const { data, error } = await supabase.functions.invoke("publish-blog", {
+        body: {
+          items: selectedPosts.map((p) => ({
+            id: p.id,
+            title: p.title,
+            slug: p.slug,
+            json_data: p.json_data,
+          })),
+          languages,
+          translate_prompt: translatePrompt || undefined,
+          slug_prefix: "crescendia",
+        },
+      });
 
-          // Publish via publish-external
-          const { error: pubError } = await supabase.functions.invoke("publish-external", {
-            body: {
-              json_data: jsonToPublish,
-              language: lang,
-              source_type: "blog",
-              source_id: post.id,
-              title: post.title,
-            },
-          });
+      if (error) throw error;
 
-          if (pubError) throw pubError;
+      const results = data?.results || [];
+      let done = 0;
 
+      for (const r of results) {
+        const post = selectedPosts.find((p) => p.id === r.item_id);
+        details.push({
+          item_id: r.item_id,
+          item_title: post?.title || r.item_id,
+          language: r.language,
+          success: r.success,
+          error: r.error,
+        });
+
+        // Save publication record for successful items
+        if (r.success && post) {
           await createPublication({
             project_id: currentProject.id,
             source_type: "blog",
-            source_id: post.id,
+            source_id: r.item_id,
             title: post.title,
-            language: lang,
-            json_data: jsonToPublish,
+            language: r.language,
+            json_data: post.json_data,
             status: "published",
           });
-
-          // Update post status
-          await updateBlogPost(post.id, { status: "published" });
-
-          details.push({ item_id: post.id, item_title: post.title, language: lang, success: true });
-        } catch (e: any) {
-          details.push({ item_id: post.id, item_title: post.title, language: lang, success: false, error: e.message });
+          await updateBlogPost(r.item_id, { status: "published" });
         }
+
         done++;
         setPublishProgress({ total, done });
+      }
+    } catch (e: any) {
+      // If the entire call failed, mark all as failed
+      for (const post of selectedPosts) {
+        for (const lang of languages) {
+          details.push({ item_id: post.id, item_title: post.title, language: lang, success: false, error: e.message });
+        }
       }
     }
 

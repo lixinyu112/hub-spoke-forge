@@ -33,9 +33,10 @@ interface PublishDialogProps {
   onPublish: (languages: string[], environment: string) => void;
   report?: PublishReportData | null;
   progress?: { total: number; done: number } | null;
+  showEnvironment?: boolean;
 }
 
-export function PublishDialog({ open, onOpenChange, selectedCount, publishing, onPublish, report, progress }: PublishDialogProps) {
+export function PublishDialog({ open, onOpenChange, selectedCount, publishing, onPublish, report, progress, showEnvironment = false }: PublishDialogProps) {
   const [selectedLangs, setSelectedLangs] = useState<Set<string>>(new Set(["zh"]));
   const [environment, setEnvironment] = useState<string>("staging");
 
@@ -134,6 +135,7 @@ export function PublishDialog({ open, onOpenChange, selectedCount, publishing, o
               已选择 <Badge variant="secondary">{selectedCount}</Badge> 个内容项
             </p>
           </div>
+          {showEnvironment && (
           <div>
             <Label className="text-sm font-medium mb-2 block">发布环境</Label>
             <div className="grid grid-cols-2 gap-2">
@@ -159,6 +161,7 @@ export function PublishDialog({ open, onOpenChange, selectedCount, publishing, o
               </label>
             </div>
           </div>
+          )}
           <div>
             <Label className="text-sm font-medium mb-2 block">选择发布语言</Label>
             <div className="grid grid-cols-1 gap-2">

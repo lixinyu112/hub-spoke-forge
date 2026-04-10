@@ -732,6 +732,7 @@ export default function BlogProcessor() {
         onPublish={handlePublish}
         report={publishReport}
         progress={publishProgress}
+        showEnvironment
       />
     </div>
   );

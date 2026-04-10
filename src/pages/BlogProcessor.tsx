@@ -567,10 +567,22 @@ export default function BlogProcessor() {
           </Card>
 
           {/* Posts list */}
-          <Card className="flex-1 min-h-0">
+          <Card className="flex-1 min-h-0 flex flex-col">
             <CardHeader className="pb-3">
               <div className="flex items-center justify-between">
-                <CardTitle className="text-base">Blog 列表 ({filteredPosts.length})</CardTitle>
+                <div className="flex items-center gap-2">
+                  <Checkbox
+                    checked={filteredPosts.length > 0 && selectedPostIds.size === filteredPosts.length}
+                    onCheckedChange={(checked) => {
+                      if (checked) {
+                        setSelectedPostIds(new Set(filteredPosts.map((p) => p.id)));
+                      } else {
+                        setSelectedPostIds(new Set());
+                      }
+                    }}
+                  />
+                  <CardTitle className="text-base">Blog 列表 ({filteredPosts.length})</CardTitle>
+                </div>
                 {selectedPostIds.size > 0 && (
                   <Button size="sm" className="gap-1" onClick={() => { setPublishOpen(true); setPublishReport(null); }}>
                     <Globe className="h-3.5 w-3.5" />
@@ -579,8 +591,8 @@ export default function BlogProcessor() {
                 )}
               </div>
             </CardHeader>
-            <CardContent>
-              <ScrollArea className="max-h-[300px]">
+            <CardContent className="flex-1 min-h-0">
+              <ScrollArea className="h-full">
                 <div className="space-y-1">
                   {filteredPosts.map((post) => (
                     <div

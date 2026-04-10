@@ -177,7 +177,7 @@ export default function ContentBrowser() {
       await createPublicationsBatch(pubs);
 
       // 2. 分批推送外部 API，每批最多 3 个 item
-      const BATCH_SIZE = 3;
+      const BATCH_SIZE = 1;
       const MAX_RETRIES = 2;
       type PublishResult = { item_id: string; item_title: string; language: string; success: boolean; error?: string };
       const allResults: PublishResult[] = [];

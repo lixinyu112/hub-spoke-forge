@@ -288,16 +288,18 @@ export default function BlogProcessor() {
     toast({ title: "JSON 模板已删除" });
   };
 
-  // Batch process MDX files
+  // Batch process MDX files with parallel execution
   const handleProcessAll = async () => {
     if (!currentProject || pendingMdxFiles.length === 0) return;
     setProcessing(true);
-    setProcessProgress({ total: pendingMdxFiles.length, done: 0 });
+    const total = pendingMdxFiles.length;
+    setProcessProgress({ total, done: 0 });
 
     const groupId = selectedGroup !== "all" && selectedGroup !== "ungrouped" ? selectedGroup : undefined;
     let done = 0;
+    const CONCURRENCY = 3; // Process 3 files in parallel
 
-    for (const mdx of pendingMdxFiles) {
+    const processSingle = async (mdx: MdxFile) => {
       try {
         const ctxParts: string[] = [];
         if (context.trim()) ctxParts.push(context.trim());
@@ -306,7 +308,7 @@ export default function BlogProcessor() {
         }
 
         const result = await generateJson({
-          type: "spoke", // reuse spoke generation logic for blog MDX→JSON
+          type: "spoke",
           feishu_content: mdx.content,
           custom_prompt: prompt || undefined,
           context: ctxParts.length > 0 ? ctxParts.join("\n") : undefined,
@@ -332,7 +334,6 @@ export default function BlogProcessor() {
         });
       } catch (err: any) {
         console.error(`处理 ${mdx.name} 失败:`, err);
-        // Still create a record with error
         await createBlogPost({
           project_id: currentProject.id,
           group_id: groupId,
@@ -342,13 +343,14 @@ export default function BlogProcessor() {
           status: "error",
         }).catch(() => {});
       }
-
       done++;
-      setProcessProgress({ total: pendingMdxFiles.length, done });
-      // Small delay between requests to avoid rate limiting
-      if (done < pendingMdxFiles.length) {
-        await new Promise((r) => setTimeout(r, 2000));
-      }
+      setProcessProgress({ total, done });
+    };
+
+    // Process in parallel batches
+    for (let i = 0; i < total; i += CONCURRENCY) {
+      const batch = pendingMdxFiles.slice(i, i + CONCURRENCY);
+      await Promise.all(batch.map(processSingle));
     }
 
     setPendingMdxFiles([]);

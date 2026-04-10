@@ -135,44 +135,127 @@ export default function BlogProcessor() {
     }
   };
 
+  // Chunked file reader - reads files in batches to avoid memory spikes
+  const readFilesInChunks = useCallback(async (files: File[]) => {
+    const CHUNK_SIZE = 20; // Read 20 files at a time
+    const allNew: MdxFile[] = [];
+    const total = files.length;
+    setUploadProgress({ total, done: 0 });
+
+    for (let i = 0; i < total; i += CHUNK_SIZE) {
+      const chunk = files.slice(i, i + CHUNK_SIZE);
+      const chunkResults = await Promise.all(
+        chunk.map(
+          (file) =>
+            new Promise<MdxFile | null>((resolve) => {
+              const reader = new FileReader();
+              reader.onload = (ev) => {
+                const content = ev.target?.result as string;
+                resolve(content ? { name: file.name, content, size: file.size } : null);
+              };
+              reader.onerror = () => {
+                console.error(`读取文件 ${file.name} 失败`);
+                resolve(null);
+              };
+              reader.readAsText(file);
+            })
+        )
+      );
+      allNew.push(...(chunkResults.filter(Boolean) as MdxFile[]));
+      setUploadProgress({ total, done: Math.min(i + CHUNK_SIZE, total) });
+    }
+
+    setUploadProgress(null);
+    return allNew;
+  }, []);
+
+  // Filter valid MDX files
+  const filterMdxFiles = (files: File[]) =>
+    files.filter((f) => /\.(mdx|md|markdown|txt)$/i.test(f.name));
+
   // MDX multi-file upload handler
-  const handleMdxUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleMdxUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const fileList = e.target.files;
     if (!fileList || fileList.length === 0) return;
 
-    const total = fileList.length;
-    const newFiles: MdxFile[] = [];
-    let processed = 0;
+    const validFiles = filterMdxFiles(Array.from(fileList));
+    if (validFiles.length === 0) {
+      toast({ title: "未找到有效的 MDX 文件", variant: "destructive" });
+      e.target.value = "";
+      return;
+    }
 
-    const onFileRead = () => {
-      processed++;
-      if (processed === total) {
-        if (newFiles.length > 0) {
-          setPendingMdxFiles((prev) => [...prev, ...newFiles]);
-          toast({ title: `已添加 ${newFiles.length} 个 MDX 文件` });
-        } else {
-          toast({ title: "未能读取任何文件", variant: "destructive" });
-        }
-      }
-    };
-
-    Array.from(fileList).forEach((file) => {
-      const reader = new FileReader();
-      reader.onload = (ev) => {
-        const content = ev.target?.result as string;
-        if (content) {
-          newFiles.push({ name: file.name, content, size: file.size });
-        }
-        onFileRead();
-      };
-      reader.onerror = () => {
-        console.error(`读取文件 ${file.name} 失败`);
-        onFileRead();
-      };
-      reader.readAsText(file);
-    });
+    const newFiles = await readFilesInChunks(validFiles);
+    if (newFiles.length > 0) {
+      setPendingMdxFiles((prev) => [...prev, ...newFiles]);
+      toast({ title: `已添加 ${newFiles.length} 个文件` });
+    }
     e.target.value = "";
   };
+
+  // Drag & drop handlers
+  const handleDragOver = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(true);
+  }, []);
+
+  const handleDragLeave = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(false);
+  }, []);
+
+  const handleDrop = useCallback(async (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(false);
+
+    const items = e.dataTransfer.items;
+    const allFiles: File[] = [];
+
+    // Support folder drops via webkitGetAsEntry
+    const readEntry = (entry: FileSystemEntry): Promise<File[]> =>
+      new Promise((resolve) => {
+        if (entry.isFile) {
+          (entry as FileSystemFileEntry).file((f) => resolve([f]), () => resolve([]));
+        } else if (entry.isDirectory) {
+          const dirReader = (entry as FileSystemDirectoryEntry).createReader();
+          dirReader.readEntries(async (entries) => {
+            const nested = await Promise.all(entries.map(readEntry));
+            resolve(nested.flat());
+          }, () => resolve([]));
+        } else {
+          resolve([]);
+        }
+      });
+
+    if (items && items.length > 0) {
+      const entries = Array.from(items)
+        .map((item) => item.webkitGetAsEntry?.())
+        .filter(Boolean) as FileSystemEntry[];
+
+      if (entries.length > 0) {
+        const nested = await Promise.all(entries.map(readEntry));
+        allFiles.push(...nested.flat());
+      } else {
+        // Fallback to dataTransfer.files
+        allFiles.push(...Array.from(e.dataTransfer.files));
+      }
+    }
+
+    const validFiles = filterMdxFiles(allFiles);
+    if (validFiles.length === 0) {
+      toast({ title: "未找到有效的 MDX 文件", variant: "destructive" });
+      return;
+    }
+
+    const newFiles = await readFilesInChunks(validFiles);
+    if (newFiles.length > 0) {
+      setPendingMdxFiles((prev) => [...prev, ...newFiles]);
+      toast({ title: `已添加 ${newFiles.length} 个文件（支持文件夹）` });
+    }
+  }, [readFilesInChunks]);
 
   // JSON template upload with persistence
   const handleJsonTemplateUpload = (e: React.ChangeEvent<HTMLInputElement>) => {

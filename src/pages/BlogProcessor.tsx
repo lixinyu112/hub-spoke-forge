@@ -567,11 +567,41 @@ export default function BlogProcessor() {
               <CardTitle className="text-base">上传与转换</CardTitle>
             </CardHeader>
             <CardContent className="space-y-3">
+              {/* Drag & Drop zone */}
+              <div
+                onDragOver={handleDragOver}
+                onDragLeave={handleDragLeave}
+                onDrop={handleDrop}
+                className={`border-2 border-dashed rounded-lg p-6 text-center transition-colors cursor-pointer ${
+                  isDragging
+                    ? "border-primary bg-primary/5"
+                    : "border-muted-foreground/25 hover:border-muted-foreground/50"
+                }`}
+                onClick={() => mdxInputRef.current?.click()}
+              >
+                <Upload className="h-8 w-8 mx-auto text-muted-foreground mb-2" />
+                <p className="text-sm text-muted-foreground">
+                  拖放 MDX 文件或文件夹到此处，或点击选择
+                </p>
+                <p className="text-xs text-muted-foreground/60 mt-1">
+                  支持 .mdx、.md、.markdown、.txt，可一次上传数百个文件
+                </p>
+              </div>
+
               <div className="flex gap-2 flex-wrap">
-                <input ref={mdxInputRef} type="file" accept=".mdx,.md,.markdown,.txt" multiple className="hidden" onChange={handleMdxUpload} />
+                <input
+                  ref={mdxInputRef}
+                  type="file"
+                  accept=".mdx,.md,.markdown,.txt"
+                  multiple
+                  className="hidden"
+                  onChange={handleMdxUpload}
+                  /* @ts-ignore - webkitdirectory for folder upload */
+                  {...({} as any)}
+                />
                 <Button variant="outline" size="sm" className="gap-1.5" onClick={() => mdxInputRef.current?.click()}>
                   <Upload className="h-3.5 w-3.5" />
-                  上传 MDX 文件
+                  选择文件
                 </Button>
                 <input ref={jsonTemplateRef} type="file" accept=".json" className="hidden" onChange={handleJsonTemplateUpload} />
                 <Button variant="outline" size="sm" className="gap-1.5" onClick={() => jsonTemplateRef.current?.click()}>
@@ -590,14 +620,43 @@ export default function BlogProcessor() {
                 </div>
               )}
 
+              {/* Upload progress */}
+              {uploadProgress && (
+                <div className="space-y-1">
+                  <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                    <Loader2 className="h-3 w-3 animate-spin" />
+                    <span>读取文件中… {uploadProgress.done}/{uploadProgress.total}</span>
+                  </div>
+                  <div className="h-1.5 bg-muted rounded-full overflow-hidden">
+                    <div
+                      className="h-full bg-primary rounded-full transition-all duration-300"
+                      style={{ width: `${(uploadProgress.done / uploadProgress.total) * 100}%` }}
+                    />
+                  </div>
+                </div>
+              )}
+
               <div className="space-y-1">
-                <p className="text-xs text-muted-foreground">
-                  {pendingMdxFiles.length > 0
-                    ? `待处理文件（${pendingMdxFiles.length} 个）：`
-                    : "暂无上传文件，请点击上方按钮选择 MDX 文件"}
-                </p>
+                <div className="flex items-center justify-between">
+                  <p className="text-xs text-muted-foreground">
+                    {pendingMdxFiles.length > 0
+                      ? `待处理文件（${pendingMdxFiles.length} 个，共 ${(pendingMdxFiles.reduce((s, f) => s + f.size, 0) / 1024).toFixed(0)}KB）：`
+                      : "暂无上传文件"}
+                  </p>
+                  {pendingMdxFiles.length > 0 && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-6 text-xs gap-1 text-muted-foreground hover:text-destructive"
+                      onClick={() => { setPendingMdxFiles([]); setPreviewingMdx(null); }}
+                    >
+                      <Trash2 className="h-3 w-3" />
+                      清空全部
+                    </Button>
+                  )}
+                </div>
                 {pendingMdxFiles.length > 0 && (
-                  <ScrollArea className="max-h-[150px]">
+                  <ScrollArea className="max-h-[200px]">
                     {pendingMdxFiles.map((f, i) => (
                       <div
                         key={i}

@@ -33,6 +33,7 @@ interface PublishDialogProps {
   onPublish: (languages: string[], environment: string) => void;
   report?: PublishReportData | null;
   progress?: { total: number; done: number } | null;
+  showEnvironment?: boolean;
 }
 
 export function PublishDialog({ open, onOpenChange, selectedCount, publishing, onPublish, report, progress }: PublishDialogProps) {

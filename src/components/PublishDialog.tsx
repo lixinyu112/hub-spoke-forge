@@ -36,7 +36,7 @@ interface PublishDialogProps {
   showEnvironment?: boolean;
 }
 
-export function PublishDialog({ open, onOpenChange, selectedCount, publishing, onPublish, report, progress }: PublishDialogProps) {
+export function PublishDialog({ open, onOpenChange, selectedCount, publishing, onPublish, report, progress, showEnvironment = false }: PublishDialogProps) {
   const [selectedLangs, setSelectedLangs] = useState<Set<string>>(new Set(["zh"]));
   const [environment, setEnvironment] = useState<string>("staging");
 

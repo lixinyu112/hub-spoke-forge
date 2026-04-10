@@ -1,5 +1,5 @@
-import { useState, useEffect, useRef } from "react";
-import { FileText, FolderPlus, Trash2, Loader2, Globe, X, FileJson, ChevronRight, Upload } from "lucide-react";
+import { useState, useEffect, useRef, useCallback } from "react";
+import { FileText, FolderPlus, Trash2, Loader2, Globe, X, FileJson, ChevronRight, Upload, Files } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -45,7 +45,8 @@ export default function BlogProcessor() {
   const jsonTemplateRef = useRef<HTMLInputElement>(null);
   const [pendingMdxFiles, setPendingMdxFiles] = useState<MdxFile[]>([]);
   const [uploadedJsonTemplate, setUploadedJsonTemplate] = useState<string | null>(null);
-  
+  const [uploadProgress, setUploadProgress] = useState<{ total: number; done: number } | null>(null);
+  const [isDragging, setIsDragging] = useState(false);
   const [context, setContext] = useState("");
 
   // Group creation
@@ -134,44 +135,127 @@ export default function BlogProcessor() {
     }
   };
 
+  // Chunked file reader - reads files in batches to avoid memory spikes
+  const readFilesInChunks = useCallback(async (files: File[]) => {
+    const CHUNK_SIZE = 20; // Read 20 files at a time
+    const allNew: MdxFile[] = [];
+    const total = files.length;
+    setUploadProgress({ total, done: 0 });
+
+    for (let i = 0; i < total; i += CHUNK_SIZE) {
+      const chunk = files.slice(i, i + CHUNK_SIZE);
+      const chunkResults = await Promise.all(
+        chunk.map(
+          (file) =>
+            new Promise<MdxFile | null>((resolve) => {
+              const reader = new FileReader();
+              reader.onload = (ev) => {
+                const content = ev.target?.result as string;
+                resolve(content ? { name: file.name, content, size: file.size } : null);
+              };
+              reader.onerror = () => {
+                console.error(`读取文件 ${file.name} 失败`);
+                resolve(null);
+              };
+              reader.readAsText(file);
+            })
+        )
+      );
+      allNew.push(...(chunkResults.filter(Boolean) as MdxFile[]));
+      setUploadProgress({ total, done: Math.min(i + CHUNK_SIZE, total) });
+    }
+
+    setUploadProgress(null);
+    return allNew;
+  }, []);
+
+  // Filter valid MDX files
+  const filterMdxFiles = (files: File[]) =>
+    files.filter((f) => /\.(mdx|md|markdown|txt)$/i.test(f.name));
+
   // MDX multi-file upload handler
-  const handleMdxUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleMdxUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const fileList = e.target.files;
     if (!fileList || fileList.length === 0) return;
 
-    const total = fileList.length;
-    const newFiles: MdxFile[] = [];
-    let processed = 0;
+    const validFiles = filterMdxFiles(Array.from(fileList));
+    if (validFiles.length === 0) {
+      toast({ title: "未找到有效的 MDX 文件", variant: "destructive" });
+      e.target.value = "";
+      return;
+    }
 
-    const onFileRead = () => {
-      processed++;
-      if (processed === total) {
-        if (newFiles.length > 0) {
-          setPendingMdxFiles((prev) => [...prev, ...newFiles]);
-          toast({ title: `已添加 ${newFiles.length} 个 MDX 文件` });
-        } else {
-          toast({ title: "未能读取任何文件", variant: "destructive" });
-        }
-      }
-    };
-
-    Array.from(fileList).forEach((file) => {
-      const reader = new FileReader();
-      reader.onload = (ev) => {
-        const content = ev.target?.result as string;
-        if (content) {
-          newFiles.push({ name: file.name, content, size: file.size });
-        }
-        onFileRead();
-      };
-      reader.onerror = () => {
-        console.error(`读取文件 ${file.name} 失败`);
-        onFileRead();
-      };
-      reader.readAsText(file);
-    });
+    const newFiles = await readFilesInChunks(validFiles);
+    if (newFiles.length > 0) {
+      setPendingMdxFiles((prev) => [...prev, ...newFiles]);
+      toast({ title: `已添加 ${newFiles.length} 个文件` });
+    }
     e.target.value = "";
   };
+
+  // Drag & drop handlers
+  const handleDragOver = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(true);
+  }, []);
+
+  const handleDragLeave = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(false);
+  }, []);
+
+  const handleDrop = useCallback(async (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(false);
+
+    const items = e.dataTransfer.items;
+    const allFiles: File[] = [];
+
+    // Support folder drops via webkitGetAsEntry
+    const readEntry = (entry: FileSystemEntry): Promise<File[]> =>
+      new Promise((resolve) => {
+        if (entry.isFile) {
+          (entry as FileSystemFileEntry).file((f) => resolve([f]), () => resolve([]));
+        } else if (entry.isDirectory) {
+          const dirReader = (entry as FileSystemDirectoryEntry).createReader();
+          dirReader.readEntries(async (entries) => {
+            const nested = await Promise.all(entries.map(readEntry));
+            resolve(nested.flat());
+          }, () => resolve([]));
+        } else {
+          resolve([]);
+        }
+      });
+
+    if (items && items.length > 0) {
+      const entries = Array.from(items)
+        .map((item) => item.webkitGetAsEntry?.())
+        .filter(Boolean) as FileSystemEntry[];
+
+      if (entries.length > 0) {
+        const nested = await Promise.all(entries.map(readEntry));
+        allFiles.push(...nested.flat());
+      } else {
+        // Fallback to dataTransfer.files
+        allFiles.push(...Array.from(e.dataTransfer.files));
+      }
+    }
+
+    const validFiles = filterMdxFiles(allFiles);
+    if (validFiles.length === 0) {
+      toast({ title: "未找到有效的 MDX 文件", variant: "destructive" });
+      return;
+    }
+
+    const newFiles = await readFilesInChunks(validFiles);
+    if (newFiles.length > 0) {
+      setPendingMdxFiles((prev) => [...prev, ...newFiles]);
+      toast({ title: `已添加 ${newFiles.length} 个文件（支持文件夹）` });
+    }
+  }, [readFilesInChunks]);
 
   // JSON template upload with persistence
   const handleJsonTemplateUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -204,16 +288,18 @@ export default function BlogProcessor() {
     toast({ title: "JSON 模板已删除" });
   };
 
-  // Batch process MDX files
+  // Batch process MDX files with parallel execution
   const handleProcessAll = async () => {
     if (!currentProject || pendingMdxFiles.length === 0) return;
     setProcessing(true);
-    setProcessProgress({ total: pendingMdxFiles.length, done: 0 });
+    const total = pendingMdxFiles.length;
+    setProcessProgress({ total, done: 0 });
 
     const groupId = selectedGroup !== "all" && selectedGroup !== "ungrouped" ? selectedGroup : undefined;
     let done = 0;
+    const CONCURRENCY = 3; // Process 3 files in parallel
 
-    for (const mdx of pendingMdxFiles) {
+    const processSingle = async (mdx: MdxFile) => {
       try {
         const ctxParts: string[] = [];
         if (context.trim()) ctxParts.push(context.trim());
@@ -222,7 +308,7 @@ export default function BlogProcessor() {
         }
 
         const result = await generateJson({
-          type: "spoke", // reuse spoke generation logic for blog MDX→JSON
+          type: "spoke",
           feishu_content: mdx.content,
           custom_prompt: prompt || undefined,
           context: ctxParts.length > 0 ? ctxParts.join("\n") : undefined,
@@ -248,7 +334,6 @@ export default function BlogProcessor() {
         });
       } catch (err: any) {
         console.error(`处理 ${mdx.name} 失败:`, err);
-        // Still create a record with error
         await createBlogPost({
           project_id: currentProject.id,
           group_id: groupId,
@@ -258,13 +343,14 @@ export default function BlogProcessor() {
           status: "error",
         }).catch(() => {});
       }
-
       done++;
-      setProcessProgress({ total: pendingMdxFiles.length, done });
-      // Small delay between requests to avoid rate limiting
-      if (done < pendingMdxFiles.length) {
-        await new Promise((r) => setTimeout(r, 2000));
-      }
+      setProcessProgress({ total, done });
+    };
+
+    // Process in parallel batches
+    for (let i = 0; i < total; i += CONCURRENCY) {
+      const batch = pendingMdxFiles.slice(i, i + CONCURRENCY);
+      await Promise.all(batch.map(processSingle));
     }
 
     setPendingMdxFiles([]);
@@ -481,11 +567,41 @@ export default function BlogProcessor() {
               <CardTitle className="text-base">上传与转换</CardTitle>
             </CardHeader>
             <CardContent className="space-y-3">
+              {/* Drag & Drop zone */}
+              <div
+                onDragOver={handleDragOver}
+                onDragLeave={handleDragLeave}
+                onDrop={handleDrop}
+                className={`border-2 border-dashed rounded-lg p-6 text-center transition-colors cursor-pointer ${
+                  isDragging
+                    ? "border-primary bg-primary/5"
+                    : "border-muted-foreground/25 hover:border-muted-foreground/50"
+                }`}
+                onClick={() => mdxInputRef.current?.click()}
+              >
+                <Upload className="h-8 w-8 mx-auto text-muted-foreground mb-2" />
+                <p className="text-sm text-muted-foreground">
+                  拖放 MDX 文件或文件夹到此处，或点击选择
+                </p>
+                <p className="text-xs text-muted-foreground/60 mt-1">
+                  支持 .mdx、.md、.markdown、.txt，可一次上传数百个文件
+                </p>
+              </div>
+
               <div className="flex gap-2 flex-wrap">
-                <input ref={mdxInputRef} type="file" accept=".mdx,.md,.markdown,.txt" multiple className="hidden" onChange={handleMdxUpload} />
+                <input
+                  ref={mdxInputRef}
+                  type="file"
+                  accept=".mdx,.md,.markdown,.txt"
+                  multiple
+                  className="hidden"
+                  onChange={handleMdxUpload}
+                  /* @ts-ignore - webkitdirectory for folder upload */
+                  {...({} as any)}
+                />
                 <Button variant="outline" size="sm" className="gap-1.5" onClick={() => mdxInputRef.current?.click()}>
                   <Upload className="h-3.5 w-3.5" />
-                  上传 MDX 文件
+                  选择文件
                 </Button>
                 <input ref={jsonTemplateRef} type="file" accept=".json" className="hidden" onChange={handleJsonTemplateUpload} />
                 <Button variant="outline" size="sm" className="gap-1.5" onClick={() => jsonTemplateRef.current?.click()}>
@@ -504,14 +620,43 @@ export default function BlogProcessor() {
                 </div>
               )}
 
+              {/* Upload progress */}
+              {uploadProgress && (
+                <div className="space-y-1">
+                  <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                    <Loader2 className="h-3 w-3 animate-spin" />
+                    <span>读取文件中… {uploadProgress.done}/{uploadProgress.total}</span>
+                  </div>
+                  <div className="h-1.5 bg-muted rounded-full overflow-hidden">
+                    <div
+                      className="h-full bg-primary rounded-full transition-all duration-300"
+                      style={{ width: `${(uploadProgress.done / uploadProgress.total) * 100}%` }}
+                    />
+                  </div>
+                </div>
+              )}
+
               <div className="space-y-1">
-                <p className="text-xs text-muted-foreground">
-                  {pendingMdxFiles.length > 0
-                    ? `待处理文件（${pendingMdxFiles.length} 个）：`
-                    : "暂无上传文件，请点击上方按钮选择 MDX 文件"}
-                </p>
+                <div className="flex items-center justify-between">
+                  <p className="text-xs text-muted-foreground">
+                    {pendingMdxFiles.length > 0
+                      ? `待处理文件（${pendingMdxFiles.length} 个，共 ${(pendingMdxFiles.reduce((s, f) => s + f.size, 0) / 1024).toFixed(0)}KB）：`
+                      : "暂无上传文件"}
+                  </p>
+                  {pendingMdxFiles.length > 0 && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-6 text-xs gap-1 text-muted-foreground hover:text-destructive"
+                      onClick={() => { setPendingMdxFiles([]); setPreviewingMdx(null); }}
+                    >
+                      <Trash2 className="h-3 w-3" />
+                      清空全部
+                    </Button>
+                  )}
+                </div>
                 {pendingMdxFiles.length > 0 && (
-                  <ScrollArea className="max-h-[150px]">
+                  <ScrollArea className="max-h-[200px]">
                     {pendingMdxFiles.map((f, i) => (
                       <div
                         key={i}

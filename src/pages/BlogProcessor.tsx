@@ -878,6 +878,7 @@ export default function BlogProcessor() {
         report={publishReport}
         progress={publishProgress}
         showEnvironment
+        allLanguages
       />
     </div>
   );

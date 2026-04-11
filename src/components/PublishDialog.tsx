@@ -34,10 +34,13 @@ interface PublishDialogProps {
   report?: PublishReportData | null;
   progress?: { total: number; done: number } | null;
   showEnvironment?: boolean;
+  /** Hide language selection and always publish all languages */
+  allLanguages?: boolean;
 }
 
-export function PublishDialog({ open, onOpenChange, selectedCount, publishing, onPublish, report, progress, showEnvironment = false }: PublishDialogProps) {
-  const [selectedLangs, setSelectedLangs] = useState<Set<string>>(new Set(["zh"]));
+export function PublishDialog({ open, onOpenChange, selectedCount, publishing, onPublish, report, progress, showEnvironment = false, allLanguages = false }: PublishDialogProps) {
+  const ALL_LANG_CODES = LANGUAGES.map((l) => l.code);
+  const [selectedLangs, setSelectedLangs] = useState<Set<string>>(new Set(allLanguages ? ALL_LANG_CODES : ["zh"]));
   const [environment, setEnvironment] = useState<string>("staging");
 
   const toggleLang = (code: string) => {
@@ -162,6 +165,17 @@ export function PublishDialog({ open, onOpenChange, selectedCount, publishing, o
             </div>
           </div>
           )}
+          {allLanguages ? (
+            <div>
+              <Label className="text-sm font-medium mb-2 block">发布语言</Label>
+              <p className="text-sm text-muted-foreground">将发布至所有 {LANGUAGES.length} 种语言：</p>
+              <div className="flex flex-wrap gap-1.5 mt-2">
+                {LANGUAGES.map((lang) => (
+                  <Badge key={lang.code} variant="secondary" className="text-xs">{lang.code} — {lang.label.split(" ")[0]}</Badge>
+                ))}
+              </div>
+            </div>
+          ) : (
           <div>
             <Label className="text-sm font-medium mb-2 block">选择发布语言</Label>
             <div className="grid grid-cols-1 gap-2">
@@ -183,6 +197,7 @@ export function PublishDialog({ open, onOpenChange, selectedCount, publishing, o
               <p className="text-xs text-destructive mt-2">请至少选择一种语言</p>
             )}
           </div>
+          )}
         </div>
         <DialogFooter className="flex-col gap-3 sm:flex-col">
           {publishing && progress && (
@@ -203,7 +218,7 @@ export function PublishDialog({ open, onOpenChange, selectedCount, publishing, o
             <Button variant="outline" onClick={() => onOpenChange(false)} disabled={publishing}>取消</Button>
             <Button onClick={handlePublish} disabled={selectedLangs.size === 0 || publishing}>
               {publishing && <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />}
-              发布 ({selectedLangs.size} 语言)
+              {allLanguages ? `发布全部 ${LANGUAGES.length} 种语言` : `发布 (${selectedLangs.size} 语言)`}
             </Button>
           </div>
         </DialogFooter>

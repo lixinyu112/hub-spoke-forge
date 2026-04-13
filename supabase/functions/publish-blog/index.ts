@@ -90,21 +90,87 @@ function toArticle(post: any): {
 } {
   const data = post.json_data || {};
 
-  // Extract markdown: prefer explicit markdown field, then content, then stringify
-  const markdown = data.markdown || data.content || data.body || JSON.stringify(data, null, 2);
+  const components = Array.isArray(data.components) ? data.components : [];
+  const articleHeader = components.find((comp: any) => comp?.type === "articleHeader")?.props || {};
+  const contentBlocks = components
+    .filter((comp: any) => comp?.type === "contentBlock")
+    .map((comp: any) => comp?.props?.content)
+    .filter((value: unknown): value is string => typeof value === "string" && value.trim().length > 0);
 
-  // Extract title: prefer json_data.title, fallback to post.title
-  const title = data.title || post.title || "Untitled";
+  const firstString = (...values: unknown[]): string | undefined => {
+    for (const value of values) {
+      if (typeof value === "string") {
+        const trimmed = value.trim();
+        if (trimmed) return trimmed;
+      }
+    }
+    return undefined;
+  };
+
+  const normalizeStringArray = (value: unknown): string[] | undefined => {
+    if (!Array.isArray(value)) return undefined;
+
+    const normalized = value
+      .map((item) => {
+        if (typeof item === "string") return item.trim();
+        if (item && typeof item === "object") {
+          const record = item as Record<string, unknown>;
+          const nested = firstString(record.slug, record.value, record.name, record.label, record.title);
+          return nested || "";
+        }
+        return "";
+      })
+      .filter(Boolean);
+
+    return normalized.length ? normalized : undefined;
+  };
+
+  const normalizePublishedAt = (value: unknown): string | undefined => {
+    if (typeof value !== "string") return undefined;
+    const trimmed = value.trim();
+    if (!trimmed) return undefined;
+    if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) {
+      return new Date(`${trimmed}T00:00:00.000Z`).toISOString();
+    }
+
+    const parsed = new Date(trimmed);
+    return Number.isNaN(parsed.getTime()) ? undefined : parsed.toISOString();
+  };
+
+  const markdown = firstString(
+    data.markdown,
+    data.content,
+    data.body,
+    contentBlocks.join("\n\n")
+  ) || JSON.stringify(data, null, 2);
+
+  const title = firstString(
+    data.title,
+    articleHeader.title,
+    post.title,
+  ) || "Untitled";
 
   return {
     title,
     markdown,
-    slug: data.slug || post.slug || undefined,
-    description: data.description || data.meta?.description || undefined,
-    categorySlugs: data.categorySlugs || data.categories || undefined,
-    publishedAt: data.publishedAt || data.published_at || undefined,
-    heroImage: data.heroImage || data.hero_image || data.cover || undefined,
-    keywords: data.keywords || data.tags || undefined,
+    slug: firstString(data.slug, post.slug),
+    description: firstString(data.description, data.meta?.description, articleHeader.subtitle),
+    categorySlugs: normalizeStringArray(
+      data.categorySlugs ?? data.categories ?? data.taxonomy?.categories ?? articleHeader.categorySlugs
+    ),
+    publishedAt: normalizePublishedAt(
+      data.publishedAt ?? data.published_at ?? articleHeader.publishDate
+    ),
+    heroImage: firstString(
+      data.heroImage,
+      data.hero_image,
+      data.cover,
+      data.meta?.ogImage,
+      articleHeader.coverImage,
+    ),
+    keywords: normalizeStringArray(
+      data.keywords ?? data.tags ?? data.meta?.keywords ?? articleHeader.tags
+    ),
   };
 }
 

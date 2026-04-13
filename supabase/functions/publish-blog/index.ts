@@ -18,7 +18,75 @@ const CMS_URLS: Record<string, string> = {
 const MAX_ARTICLES_PER_BATCH = 50;
 
 /**
- * Translate JSON content to target language using LLM.
+ * Call LLM to translate a JSON string.
+ * Returns parsed JSON or throws on failure.
+ */
+async function callTranslateApi(
+  jsonStr: string,
+  targetLang: string,
+  llmApiKey: string,
+  customSystemPrompt?: string,
+): Promise<any> {
+  const langName = LANG_NAMES[targetLang] || targetLang;
+
+  const defaultSystemPrompt = "你是一个精确的 JSON 翻译引擎，只输出翻译后的 JSON。";
+
+  const baseRules = `请将以下 JSON 中所有面向用户的文本内容翻译为 ${langName}（语言代码：${targetLang}）。
+规则：
+1. 只翻译 JSON 值中的自然语言文本（标题、描述、段落、按钮文案等）
+2. 不要翻译 JSON 的键名（key）
+3. 不要翻译 URL、slug、技术标识符、CSS类名、图片路径
+4. 不要翻译 type、status 等枚举值
+5. 保持 JSON 结构完全不变
+6. 直接输出翻译后的 JSON，不要添加任何解释`;
+
+  let systemPrompt: string;
+  let userPrompt: string;
+  if (customSystemPrompt?.trim()) {
+    systemPrompt = customSystemPrompt.trim();
+    userPrompt = `${baseRules}\n\n请严格遵循以上系统指令中的翻译要求进行翻译。\n\nJSON 内容：\n${jsonStr}`;
+  } else {
+    systemPrompt = defaultSystemPrompt;
+    userPrompt = `${baseRules}\n\nJSON 内容：\n${jsonStr}`;
+  }
+
+  const resp = await fetch("https://api.babelark.com/v1/chat/completions", {
+    method: "POST",
+    headers: {
+      "Authorization": `Bearer ${llmApiKey}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      model: "gemini-3.1-flash-lite-preview",
+      messages: [
+        { role: "system", content: systemPrompt },
+        { role: "user", content: userPrompt },
+      ],
+      temperature: 0.1,
+    }),
+  });
+
+  if (!resp.ok) {
+    const errText = await resp.text();
+    throw new Error(`Translation API ${resp.status}: ${errText}`);
+  }
+
+  const result = await resp.json();
+  let content = result.choices?.[0]?.message?.content || "";
+  content = content.replace(/^```(?:json)?\s*\n?/i, "").replace(/\n?```\s*$/i, "").trim();
+  return JSON.parse(content);
+}
+
+/** Rough size estimation for chunking */
+function estimateTokens(str: string): number {
+  return Math.ceil(str.length / 3);
+}
+
+const MAX_CHUNK_TOKENS = 6000;
+
+/**
+ * Translate JSON, chunking by top-level components array if content is too large.
+ * Strictly follows the custom translate prompt when provided.
  */
 async function translateJson(jsonData: any, targetLang: string, customSystemPrompt?: string): Promise<any> {
   const llmApiKey = Deno.env.get("CUSTOM_LLM_API_KEY");
@@ -27,51 +95,92 @@ async function translateJson(jsonData: any, targetLang: string, customSystemProm
     return jsonData;
   }
 
-  const langName = LANG_NAMES[targetLang] || targetLang;
-  const systemPrompt = customSystemPrompt || "你是一个精确的 JSON 翻译引擎，只输出翻译后的 JSON。";
+  const fullStr = JSON.stringify(jsonData, null, 2);
+  const tokens = estimateTokens(fullStr);
 
-  const prompt = `请将以下 JSON 中所有面向用户的文本内容翻译为 ${langName}（语言代码：${targetLang}）。
-规则：
-1. 只翻译 JSON 值中的自然语言文本（标题、描述、段落、按钮文案等）
-2. 不要翻译 JSON 的键名（key）
-3. 不要翻译 URL、slug、技术标识符、CSS类名、图片路径
-4. 不要翻译 type、status 等枚举值
-5. 保持 JSON 结构完全不变
-6. 直接输出翻译后的 JSON，不要添加任何解释
-
-JSON 内容：
-${JSON.stringify(jsonData, null, 2)}`;
-
-  try {
-    const resp = await fetch("https://api.babelark.com/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        "Authorization": `Bearer ${llmApiKey}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model: "gemini-3.1-flash-lite-preview",
-        messages: [
-          { role: "system", content: systemPrompt },
-          { role: "user", content: prompt },
-        ],
-        temperature: 0.1,
-      }),
-    });
-
-    if (!resp.ok) {
-      console.error("Translation API error:", resp.status, await resp.text());
+  if (tokens <= MAX_CHUNK_TOKENS) {
+    try {
+      return await callTranslateApi(fullStr, targetLang, llmApiKey, customSystemPrompt);
+    } catch (err) {
+      console.error("Translation failed (single):", err);
       return jsonData;
     }
-
-    const result = await resp.json();
-    let content = result.choices?.[0]?.message?.content || "";
-    content = content.replace(/^```(?:json)?\s*\n?/i, "").replace(/\n?```\s*$/i, "").trim();
-    return JSON.parse(content);
-  } catch (err) {
-    console.error("Translation failed:", err);
-    return jsonData;
   }
+
+  console.log(`Content too large (${tokens} est. tokens), chunking for translation...`);
+
+  if (typeof jsonData !== "object" || jsonData === null || Array.isArray(jsonData)) {
+    try {
+      return await callTranslateApi(fullStr, targetLang, llmApiKey, customSystemPrompt);
+    } catch (err) {
+      console.error("Translation failed (large non-object):", err);
+      return jsonData;
+    }
+  }
+
+  const result: any = {};
+  const keys = Object.keys(jsonData);
+  const componentsKey = keys.find((k) => k === "components" && Array.isArray(jsonData[k]));
+
+  const metaFields: any = {};
+  for (const k of keys) {
+    if (k !== componentsKey) metaFields[k] = jsonData[k];
+  }
+
+  if (Object.keys(metaFields).length > 0) {
+    const metaStr = JSON.stringify(metaFields, null, 2);
+    if (estimateTokens(metaStr) > 50) {
+      try {
+        const translated = await callTranslateApi(metaStr, targetLang, llmApiKey, customSystemPrompt);
+        Object.assign(result, translated);
+      } catch (err) {
+        console.error("Translation failed for meta fields:", err);
+        Object.assign(result, metaFields);
+      }
+    } else {
+      Object.assign(result, metaFields);
+    }
+  }
+
+  if (componentsKey) {
+    const components = jsonData[componentsKey] as any[];
+    const translatedComponents: any[] = [];
+    let chunk: any[] = [];
+    let chunkSize = 0;
+
+    for (const comp of components) {
+      const compTokens = estimateTokens(JSON.stringify(comp));
+
+      if (chunk.length > 0 && chunkSize + compTokens > MAX_CHUNK_TOKENS) {
+        try {
+          const chunkArr = await callTranslateApi(JSON.stringify(chunk, null, 2), targetLang, llmApiKey, customSystemPrompt);
+          translatedComponents.push(...(Array.isArray(chunkArr) ? chunkArr : [chunkArr]));
+        } catch (err) {
+          console.error(`Translation failed for component chunk (${chunk.length} items):`, err);
+          translatedComponents.push(...chunk);
+        }
+        chunk = [];
+        chunkSize = 0;
+      }
+
+      chunk.push(comp);
+      chunkSize += compTokens;
+    }
+
+    if (chunk.length > 0) {
+      try {
+        const chunkArr = await callTranslateApi(JSON.stringify(chunk, null, 2), targetLang, llmApiKey, customSystemPrompt);
+        translatedComponents.push(...(Array.isArray(chunkArr) ? chunkArr : [chunkArr]));
+      } catch (err) {
+        console.error(`Translation failed for final chunk (${chunk.length} items):`, err);
+        translatedComponents.push(...chunk);
+      }
+    }
+
+    result[componentsKey] = translatedComponents;
+  }
+
+  return result;
 }
 
 /**

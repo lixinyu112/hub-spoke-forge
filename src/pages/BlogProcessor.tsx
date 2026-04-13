@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from "react";
-import { FileText, FolderPlus, Trash2, Loader2, Globe, X, FileJson, ChevronRight, Upload, Files } from "lucide-react";
+import { FileText, FolderPlus, Trash2, Loader2, Globe, X, FileJson, Upload } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -30,6 +30,54 @@ interface MdxFile {
   name: string;
   content: string;
   size: number;
+}
+
+/** Extract CMS API article fields from a blog post (mirrors toArticle in publish-blog) */
+function extractArticleFields(post: BlogPost) {
+  const data: any = post.json_data || {};
+  const components = Array.isArray(data.components) ? data.components : [];
+  const articleHeader = components.find((c: any) => c?.type === "articleHeader")?.props || {};
+  const contentBlocks = components
+    .filter((c: any) => c?.type === "contentBlock")
+    .map((c: any) => c?.props?.content)
+    .filter((v: unknown): v is string => typeof v === "string" && v.trim().length > 0);
+
+  const first = (...vals: unknown[]): string | undefined => {
+    for (const v of vals) { if (typeof v === "string" && v.trim()) return v.trim(); }
+    return undefined;
+  };
+
+  const strArr = (val: unknown): string[] | undefined => {
+    if (!Array.isArray(val)) return undefined;
+    const r = val.map((item) => {
+      if (typeof item === "string") return item.trim();
+      if (item && typeof item === "object") {
+        const rec = item as Record<string, unknown>;
+        return first(rec.slug, rec.value, rec.name, rec.label, rec.title) || "";
+      }
+      return "";
+    }).filter(Boolean);
+    return r.length ? r : undefined;
+  };
+
+  const normDate = (val: unknown): string | undefined => {
+    if (typeof val !== "string" || !val.trim()) return undefined;
+    const t = val.trim();
+    if (/^\d{4}-\d{2}-\d{2}$/.test(t)) return new Date(`${t}T00:00:00.000Z`).toISOString();
+    const d = new Date(t);
+    return Number.isNaN(d.getTime()) ? undefined : d.toISOString();
+  };
+
+  return {
+    title: first(data.title, articleHeader.title, post.title) || "Untitled",
+    markdown: first(data.markdown, data.content, data.body, contentBlocks.join("\n\n")) || JSON.stringify(data, null, 2),
+    slug: first(data.slug, post.slug),
+    description: first(data.description, data.meta?.description, articleHeader.subtitle),
+    categorySlugs: strArr(data.categorySlugs ?? data.categories ?? data.taxonomy?.categories ?? articleHeader.categorySlugs),
+    publishedAt: normDate(data.publishedAt ?? data.published_at ?? articleHeader.publishDate),
+    heroImage: first(data.heroImage, data.hero_image, data.cover, data.meta?.ogImage, articleHeader.coverImage),
+    keywords: strArr(data.keywords ?? data.tags ?? data.meta?.keywords ?? articleHeader.tags),
+  };
 }
 
 export default function BlogProcessor() {

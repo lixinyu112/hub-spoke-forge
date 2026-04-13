@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from "react";
-import { FileText, FolderPlus, Trash2, Loader2, Globe, X, FileJson, ChevronRight, Upload, Files } from "lucide-react";
+import { FileText, FolderPlus, Trash2, Loader2, Globe, X, FileJson, Upload } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -30,6 +30,54 @@ interface MdxFile {
   name: string;
   content: string;
   size: number;
+}
+
+/** Extract CMS API article fields from a blog post (mirrors toArticle in publish-blog) */
+function extractArticleFields(post: BlogPost) {
+  const data: any = post.json_data || {};
+  const components = Array.isArray(data.components) ? data.components : [];
+  const articleHeader = components.find((c: any) => c?.type === "articleHeader")?.props || {};
+  const contentBlocks = components
+    .filter((c: any) => c?.type === "contentBlock")
+    .map((c: any) => c?.props?.content)
+    .filter((v: unknown): v is string => typeof v === "string" && v.trim().length > 0);
+
+  const first = (...vals: unknown[]): string | undefined => {
+    for (const v of vals) { if (typeof v === "string" && v.trim()) return v.trim(); }
+    return undefined;
+  };
+
+  const strArr = (val: unknown): string[] | undefined => {
+    if (!Array.isArray(val)) return undefined;
+    const r = val.map((item) => {
+      if (typeof item === "string") return item.trim();
+      if (item && typeof item === "object") {
+        const rec = item as Record<string, unknown>;
+        return first(rec.slug, rec.value, rec.name, rec.label, rec.title) || "";
+      }
+      return "";
+    }).filter(Boolean);
+    return r.length ? r : undefined;
+  };
+
+  const normDate = (val: unknown): string | undefined => {
+    if (typeof val !== "string" || !val.trim()) return undefined;
+    const t = val.trim();
+    if (/^\d{4}-\d{2}-\d{2}$/.test(t)) return new Date(`${t}T00:00:00.000Z`).toISOString();
+    const d = new Date(t);
+    return Number.isNaN(d.getTime()) ? undefined : d.toISOString();
+  };
+
+  return {
+    title: first(data.title, articleHeader.title, post.title) || "Untitled",
+    markdown: first(data.markdown, data.content, data.body, contentBlocks.join("\n\n")) || JSON.stringify(data, null, 2),
+    slug: first(data.slug, post.slug),
+    description: first(data.description, data.meta?.description, articleHeader.subtitle),
+    categorySlugs: strArr(data.categorySlugs ?? data.categories ?? data.taxonomy?.categories ?? articleHeader.categorySlugs),
+    publishedAt: normDate(data.publishedAt ?? data.published_at ?? articleHeader.publishDate),
+    heroImage: first(data.heroImage, data.hero_image, data.cover, data.meta?.ogImage, articleHeader.coverImage),
+    keywords: strArr(data.keywords ?? data.tags ?? data.meta?.keywords ?? articleHeader.tags),
+  };
 }
 
 export default function BlogProcessor() {
@@ -791,27 +839,10 @@ export default function BlogProcessor() {
             <Tabs defaultValue="json" className="flex-1 flex flex-col">
               <div className="border-b px-4">
                 <TabsList className="bg-transparent h-9">
-                  <TabsTrigger value="mdx" className="text-xs">MDX 原文</TabsTrigger>
                   <TabsTrigger value="json" className="text-xs">JSON 输出</TabsTrigger>
-                  <TabsTrigger value="preview" className="text-xs">内容预览</TabsTrigger>
+                  <TabsTrigger value="preview" className="text-xs">接口字段预览</TabsTrigger>
                 </TabsList>
               </div>
-              <TabsContent value="mdx" className="flex-1 m-0 overflow-auto">
-                {previewingMdx ? (
-                  <div className="p-4">
-                    <div className="flex items-center gap-2 mb-3">
-                      <FileText className="h-4 w-4 text-muted-foreground" />
-                      <span className="text-sm font-medium">{previewingMdx.name}</span>
-                      <span className="text-[10px] text-muted-foreground font-mono">
-                        {previewingMdx.size < 1024 ? `${previewingMdx.size}B` : `${(previewingMdx.size / 1024).toFixed(1)}KB`}
-                      </span>
-                    </div>
-                    <pre className="text-xs bg-muted/30 rounded-md p-3 overflow-auto whitespace-pre-wrap font-mono max-h-[500px]">{previewingMdx.content}</pre>
-                  </div>
-                ) : (
-                  <p className="text-sm text-muted-foreground text-center py-8">点击左侧 MDX 文件名预览原文内容</p>
-                )}
-              </TabsContent>
               <TabsContent value="json" className="flex-1 m-0">
                 <CodeViewer
                   code={editingJson}
@@ -822,25 +853,92 @@ export default function BlogProcessor() {
                   onDiscard={handleDiscardPost}
                   confirmed={false}
                 />
+                {selectedPost?.json_data && !selectedPost.json_data.error && (() => {
+                  const mapped = extractArticleFields(selectedPost);
+                  return (
+                    <div className="border-t px-4 py-3 space-y-1.5 bg-muted/20">
+                      <p className="text-xs font-semibold text-muted-foreground">字段映射反馈</p>
+                      {([
+                        ["title", mapped.title, true],
+                        ["markdown", mapped.markdown ? `${mapped.markdown.slice(0, 80)}…（共 ${mapped.markdown.length} 字符）` : "", true],
+                        ["slug", mapped.slug, false],
+                        ["description", mapped.description, false],
+                        ["categorySlugs", mapped.categorySlugs?.join(", "), false],
+                        ["publishedAt", mapped.publishedAt, false],
+                        ["heroImage", mapped.heroImage, false],
+                        ["keywords", mapped.keywords?.join(", "), false],
+                      ] as [string, string | undefined, boolean][]).map(([field, value, required]) => (
+                        <div key={field} className="flex items-start gap-2 text-xs">
+                          <Badge variant={value ? "default" : required ? "destructive" : "outline"} className="text-[9px] shrink-0 mt-0.5">
+                            {field}{required ? " *" : ""}
+                          </Badge>
+                          <span className={`break-all ${value ? "text-foreground" : "text-muted-foreground italic"}`}>
+                            {value || "未提取到"}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  );
+                })()}
               </TabsContent>
               <TabsContent value="preview" className="flex-1 m-0 p-4 overflow-auto">
-                {selectedPost?.json_data && !selectedPost.json_data.error ? (
-                  <div className="space-y-3">
-                    <h2 className="text-lg font-semibold">{selectedPost.json_data.title || selectedPost.title}</h2>
-                    {selectedPost.json_data.meta?.description && (
-                      <p className="text-sm text-muted-foreground">{selectedPost.json_data.meta.description}</p>
-                    )}
-                    {selectedPost.json_data.components?.map((comp: any, i: number) => (
-                      <div key={i} className="flex items-center gap-2 p-2 rounded bg-muted/30 border">
-                        <ChevronRight className="h-3 w-3 text-muted-foreground" />
-                        <Badge variant="outline" className="text-[10px]">{comp.type}</Badge>
-                        <span className="text-xs text-muted-foreground truncate">{comp.props?.title || comp.id}</span>
+                {selectedPost?.json_data && !selectedPost.json_data.error ? (() => {
+                  const article = extractArticleFields(selectedPost);
+                  return (
+                    <div className="space-y-4">
+                      <div>
+                        <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-1">title *</p>
+                        <p className="text-base font-semibold">{article.title}</p>
                       </div>
-                    ))}
-                  </div>
-                ) : (
+                      {article.slug && (
+                        <div>
+                          <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-1">slug</p>
+                          <p className="text-sm font-mono text-muted-foreground">{article.slug}</p>
+                        </div>
+                      )}
+                      {article.description && (
+                        <div>
+                          <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-1">description</p>
+                          <p className="text-sm text-muted-foreground">{article.description}</p>
+                        </div>
+                      )}
+                      {article.heroImage && (
+                        <div>
+                          <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-1">heroImage</p>
+                          <a href={article.heroImage} target="_blank" rel="noopener noreferrer" className="text-xs text-primary underline break-all">{article.heroImage}</a>
+                        </div>
+                      )}
+                      {article.categorySlugs && article.categorySlugs.length > 0 && (
+                        <div>
+                          <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-1">categorySlugs</p>
+                          <div className="flex flex-wrap gap-1">
+                            {article.categorySlugs.map((c, i) => <Badge key={i} variant="outline" className="text-[10px]">{c}</Badge>)}
+                          </div>
+                        </div>
+                      )}
+                      {article.publishedAt && (
+                        <div>
+                          <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-1">publishedAt</p>
+                          <p className="text-sm font-mono text-muted-foreground">{article.publishedAt}</p>
+                        </div>
+                      )}
+                      {article.keywords && article.keywords.length > 0 && (
+                        <div>
+                          <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-1">keywords</p>
+                          <div className="flex flex-wrap gap-1">
+                            {article.keywords.map((k, i) => <Badge key={i} variant="secondary" className="text-[10px]">{k}</Badge>)}
+                          </div>
+                        </div>
+                      )}
+                      <div>
+                        <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-1">markdown *</p>
+                        <pre className="text-xs bg-muted/30 rounded-md p-3 overflow-auto whitespace-pre-wrap font-mono max-h-[400px]">{article.markdown}</pre>
+                      </div>
+                    </div>
+                  );
+                })() : (
                   <p className="text-sm text-muted-foreground text-center py-8">
-                    {selectedPost ? "JSON 数据无效" : "选择一个 Blog 查看预览"}
+                    {selectedPost ? "JSON 数据无效" : "选择一个 Blog 查看接口字段"}
                   </p>
                 )}
               </TabsContent>

@@ -37,7 +37,8 @@ Deno.serve(async (req) => {
       // Paginate to fetch ALL documents
       let allFiles: any[] = [];
       let pageToken = '';
-      do {
+      let hasMore = true;
+      while (hasMore) {
         let apiUrl = `https://open.feishu.cn/open-apis/drive/v1/files?page_size=${pageSize}`;
         if (folderToken) apiUrl += `&folder_token=${folderToken}`;
         if (pageToken) apiUrl += `&page_token=${pageToken}`;
@@ -52,9 +53,10 @@ Deno.serve(async (req) => {
           });
         }
         allFiles = allFiles.concat(data.data?.files || []);
-        pageToken = data.data?.page_token || '';
-        console.log(`list_docs: fetched ${allFiles.length} files so far, has_more=${data.data?.has_more}`);
-      } while (pageToken);
+        hasMore = !!data.data?.has_more;
+        pageToken = data.data?.page_token || data.data?.next_page_token || '';
+        console.log(`list_docs: fetched ${allFiles.length} files so far, has_more=${hasMore}, page_token=${pageToken}, keys=${JSON.stringify(Object.keys(data.data || {}))}`);
+      }
 
       console.log(`list_docs: total files fetched = ${allFiles.length}`);
       return new Response(JSON.stringify({ code: 0, data: { files: allFiles, total: allFiles.length } }), {

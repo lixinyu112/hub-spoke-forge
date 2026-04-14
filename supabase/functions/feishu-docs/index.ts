@@ -31,20 +31,33 @@ Deno.serve(async (req) => {
     const token = await getTenantAccessToken();
 
     if (action === 'list_docs') {
-      // List recent documents from a folder or search
       const folderToken = url.searchParams.get('folder_token') || '';
       const pageSize = url.searchParams.get('page_size') || '50';
-      const pageToken = url.searchParams.get('page_token') || '';
 
-      let apiUrl = `https://open.feishu.cn/open-apis/drive/v1/files?page_size=${pageSize}`;
-      if (folderToken) apiUrl += `&folder_token=${folderToken}`;
-      if (pageToken) apiUrl += `&page_token=${pageToken}`;
+      // Paginate to fetch ALL documents
+      let allFiles: any[] = [];
+      let pageToken = '';
+      do {
+        let apiUrl = `https://open.feishu.cn/open-apis/drive/v1/files?page_size=${pageSize}`;
+        if (folderToken) apiUrl += `&folder_token=${folderToken}`;
+        if (pageToken) apiUrl += `&page_token=${pageToken}`;
 
-      const res = await fetch(apiUrl, {
-        headers: { 'Authorization': `Bearer ${token}` },
-      });
-      const data = await res.json();
-      return new Response(JSON.stringify(data), {
+        const res = await fetch(apiUrl, {
+          headers: { 'Authorization': `Bearer ${token}` },
+        });
+        const data = await res.json();
+        if (data.code !== 0) {
+          return new Response(JSON.stringify(data), {
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          });
+        }
+        allFiles = allFiles.concat(data.data?.files || []);
+        pageToken = data.data?.page_token || '';
+        console.log(`list_docs: fetched ${allFiles.length} files so far, has_more=${data.data?.has_more}`);
+      } while (pageToken);
+
+      console.log(`list_docs: total files fetched = ${allFiles.length}`);
+      return new Response(JSON.stringify({ code: 0, data: { files: allFiles, total: allFiles.length } }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }

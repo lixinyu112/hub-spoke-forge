@@ -70,7 +70,7 @@ function extractArticleFields(post: BlogPost) {
 
   return {
     title: first(data.title, articleHeader.title, post.title) || "Untitled",
-    markdown: first(data.markdown, data.content, data.body, contentBlocks.join("\n\n")) || JSON.stringify(data, null, 2),
+    markdown: first(data.markdown, data.content, data.body, contentBlocks.length > 0 ? contentBlocks.join("\n\n") : undefined) || "",
     slug: first(data.slug, post.slug),
     description: first(data.description, data.meta?.description, articleHeader.subtitle),
     categorySlugs: strArr(data.categorySlugs ?? data.categories ?? data.taxonomy?.categories ?? articleHeader.categorySlugs),

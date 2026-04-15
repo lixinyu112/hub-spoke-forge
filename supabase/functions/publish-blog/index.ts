@@ -250,8 +250,8 @@ function toArticle(post: any): {
     data.markdown,
     data.content,
     data.body,
-    contentBlocks.join("\n\n")
-  ) || JSON.stringify(data, null, 2);
+    contentBlocks.length > 0 ? contentBlocks.join("\n\n") : undefined,
+  ) || "";
 
   const title = firstString(
     data.title,

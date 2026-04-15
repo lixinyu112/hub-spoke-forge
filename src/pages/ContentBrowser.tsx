@@ -544,6 +544,18 @@ export default function ContentBrowser() {
         report={publishReport}
         progress={publishProgress}
       />
+
+      {currentProject && selectedThemeId && (() => {
+        const theme = allThemes.find((t) => t.id === selectedThemeId);
+        return theme ? (
+          <SitemapDialog
+            open={sitemapDialogOpen}
+            onOpenChange={setSitemapDialogOpen}
+            projectId={currentProject.id}
+            theme={theme}
+          />
+        ) : null;
+      })()}
     </div>
   );
 }

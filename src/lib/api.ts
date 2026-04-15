@@ -313,16 +313,3 @@ export async function upsertSitemapConfig(projectId: string, config: Omit<Sitema
   if (!res.ok) throw new Error("Failed to create sitemap config");
   return (await res.json())[0];
 }
-  const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-  const anonKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
-  const res = await fetch(`${supabaseUrl}/rest/v1/documents?project_id=eq.${projectId}&token=eq.${token}`, {
-    method: "PATCH",
-    headers: { apikey: anonKey, Authorization: `Bearer ${anonKey}`, "Content-Type": "application/json", Prefer: "return=representation" },
-    body: JSON.stringify(updates),
-  });
-  if (!res.ok) {
-    const err = await res.text();
-    throw new Error(`更新文档失败: ${err}`);
-  }
-  return (await res.json())[0];
-}

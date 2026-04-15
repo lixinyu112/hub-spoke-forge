@@ -277,9 +277,12 @@ function toArticle(post: any): {
       data.meta?.ogImage,
       articleHeader.coverImage,
     ),
-    keywords: normalizeStringArray(
-      data.keywords ?? data.tags ?? data.meta?.keywords ?? articleHeader.tags
-    ),
+    keywords: (() => {
+      const arr = normalizeStringArray(
+        data.keywords ?? data.tags ?? data.meta?.keywords ?? articleHeader.tags
+      );
+      return arr ? arr.map((k) => ({ keyword: k })) : undefined;
+    })(),
   };
 }
 

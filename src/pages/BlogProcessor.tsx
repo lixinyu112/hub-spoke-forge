@@ -71,12 +71,12 @@ function extractArticleFields(post: BlogPost) {
   return {
     title: first(data.title, articleHeader.title, post.title) || "Untitled",
     markdown: first(data.markdown, data.content, data.body, contentBlocks.length > 0 ? contentBlocks.join("\n\n") : undefined) || "",
-    slug: first(data.slug, post.slug),
-    description: first(data.description, data.meta?.description, articleHeader.subtitle),
-    categorySlugs: strArr(data.categorySlugs ?? data.categories ?? data.taxonomy?.categories ?? articleHeader.categorySlugs),
-    publishedAt: normDate(data.publishedAt ?? data.published_at ?? articleHeader.publishDate),
-    heroImage: first(data.heroImage, data.hero_image, data.cover, data.meta?.ogImage, articleHeader.coverImage),
-    keywords: strArr(data.keywords ?? data.tags ?? data.meta?.keywords ?? articleHeader.tags),
+    slug: first(data.slug, post.slug) || "",
+    description: first(data.description, data.meta?.description, articleHeader.subtitle) || "",
+    categorySlugs: strArr(data.categorySlugs ?? data.categories ?? data.taxonomy?.categories ?? articleHeader.categorySlugs) || [],
+    publishedAt: normDate(data.publishedAt ?? data.published_at ?? articleHeader.publishDate) || "",
+    heroImage: first(data.heroImage, data.hero_image, data.cover, data.meta?.ogImage, articleHeader.coverImage) || "",
+    keywords: strArr(data.keywords ?? data.tags ?? data.meta?.keywords ?? articleHeader.tags) || [],
   };
 }
 
@@ -471,6 +471,7 @@ export default function BlogProcessor() {
             title: p.title,
             slug: p.slug,
             json_data: p.json_data,
+            article: extractArticleFields(p),
           })),
           languages,
           translate_prompt: translatePrompt || undefined,

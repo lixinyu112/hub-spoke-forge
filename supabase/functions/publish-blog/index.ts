@@ -190,12 +190,12 @@ async function translateJson(jsonData: any, targetLang: string, customSystemProm
 function toArticle(post: any): {
   title: string;
   markdown: string;
-  slug: string;
-  description: string;
-  categorySlugs: string[];
-  publishedAt: string;
-  heroImage: string;
-  keywords: string[];
+  slug?: string;
+  description?: string;
+  categorySlugs?: string[];
+  publishedAt?: string;
+  heroImage?: string;
+  keywords?: string[];
 } {
   const data = post.json_data || {};
 
@@ -250,8 +250,8 @@ function toArticle(post: any): {
     data.markdown,
     data.content,
     data.body,
-    contentBlocks.length > 0 ? contentBlocks.join("\n\n") : undefined,
-  ) || "";
+    contentBlocks.join("\n\n")
+  ) || JSON.stringify(data, null, 2);
 
   const title = firstString(
     data.title,
@@ -262,24 +262,24 @@ function toArticle(post: any): {
   return {
     title,
     markdown,
-    slug: firstString(data.slug, post.slug) || "",
-    description: firstString(data.description, data.meta?.description, articleHeader.subtitle) || "",
+    slug: firstString(data.slug, post.slug),
+    description: firstString(data.description, data.meta?.description, articleHeader.subtitle),
     categorySlugs: normalizeStringArray(
       data.categorySlugs ?? data.categories ?? data.taxonomy?.categories ?? articleHeader.categorySlugs
-    ) || [],
+    ),
     publishedAt: normalizePublishedAt(
       data.publishedAt ?? data.published_at ?? articleHeader.publishDate
-    ) || "",
+    ),
     heroImage: firstString(
       data.heroImage,
       data.hero_image,
       data.cover,
       data.meta?.ogImage,
       articleHeader.coverImage,
-    ) || "",
+    ),
     keywords: normalizeStringArray(
       data.keywords ?? data.tags ?? data.meta?.keywords ?? articleHeader.tags
-    ) || [],
+    ),
   };
 }
 
@@ -329,16 +329,7 @@ serve(async (req) => {
       // Batch articles (max 50 per request)
       for (let i = 0; i < translatedItems.length; i += MAX_ARTICLES_PER_BATCH) {
         const batch = translatedItems.slice(i, i + MAX_ARTICLES_PER_BATCH);
-        const articles = batch.map(({ article }) => ({
-          title: article.title ?? "",
-          markdown: article.markdown ?? "",
-          slug: article.slug ?? "",
-          description: article.description ?? "",
-          categorySlugs: Array.isArray(article.categorySlugs) ? article.categorySlugs : [],
-          publishedAt: article.publishedAt ?? "",
-          heroImage: article.heroImage ?? "",
-          keywords: Array.isArray(article.keywords) ? article.keywords : [],
-        }));
+        const articles = batch.map((b) => b.article);
 
         try {
           const cmsBaseUrl = CMS_URLS[environment] || CMS_URLS.production;

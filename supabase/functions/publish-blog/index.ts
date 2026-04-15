@@ -315,15 +315,38 @@ serve(async (req) => {
       // Translate all items for this language
       const translatedItems: { post: any; article: any }[] = [];
 
-      for (const item of items) {
+    for (const item of items) {
         try {
-          // Translate json_data if needed
-          const translatedData = lang === "zh" && !translate_prompt
-            ? item
-            : { ...item, json_data: await translateJson(item.json_data, lang, translate_prompt) };
+          const data = item.json_data || {};
 
-          const article = toArticle(translatedData);
-          translatedItems.push({ post: item, article });
+          // If json_data already has articles array, use them directly
+          if (Array.isArray(data.articles) && data.articles.length > 0) {
+            // Translate each article's translatable fields
+            for (const rawArticle of data.articles) {
+              let article = { ...rawArticle };
+              if (lang !== "zh" || translate_prompt) {
+                try {
+                  article = await translateJson(article, lang, translate_prompt);
+                } catch (err) {
+                  console.error(`Translation failed for article "${article.title}":`, err);
+                }
+              }
+              // Normalize keywords to [{keyword: "..."}] format for CMS
+              if (Array.isArray(article.keywords)) {
+                article.keywords = article.keywords.map((k: any) =>
+                  typeof k === "string" ? { keyword: k } : k
+                );
+              }
+              translatedItems.push({ post: item, article });
+            }
+          } else {
+            // Legacy: extract fields via toArticle
+            const translatedData = lang === "zh" && !translate_prompt
+              ? item
+              : { ...item, json_data: await translateJson(data, lang, translate_prompt) };
+            const article = toArticle(translatedData);
+            translatedItems.push({ post: item, article });
+          }
         } catch (err) {
           results.push({ item_id: item.id, language: lang, success: false, error: `Translation failed: ${err}` });
         }

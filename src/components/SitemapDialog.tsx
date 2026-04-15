@@ -115,7 +115,8 @@ export function SitemapDialog({ open, onOpenChange, projectId, theme }: SitemapD
         ...(theme.unlinkedSpokes || []),
       ];
       for (const spoke of allSpokes) {
-        const slug = spoke.slug || spoke.title;
+        const jsonSlug = spoke.json_data?.slug || spoke.json_data?.spokeSlug;
+        const slug = jsonSlug || spoke.slug || spoke.title;
         const loc = `${config.base_url}${buildUrl(config.url_pattern_spoke || "", lang, slug)}`;
         const lastmod = spoke.published_at ? new Date(spoke.published_at).toISOString().split("T")[0] : new Date().toISOString().split("T")[0];
         let urlEntry = `  <url>\n    <loc>${escapeXml(loc)}</loc>\n    <lastmod>${lastmod}</lastmod>`;

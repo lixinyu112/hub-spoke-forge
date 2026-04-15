@@ -464,20 +464,26 @@ export default function BlogProcessor() {
       const translatePrompt = await loadPromptConfig(currentProject.id, "translate");
 
       // Call publish-blog edge function which handles translation + CMS push
+      const requestBody = {
+        items: selectedPosts.map((p) => ({
+          id: p.id,
+          title: p.title,
+          slug: p.slug,
+          json_data: p.json_data,
+        })),
+        languages,
+        translate_prompt: translatePrompt || undefined,
+        slug_prefix: "crescendia",
+        environment,
+      };
+      console.log("[publish-blog] Request Body:", JSON.stringify(requestBody, null, 2));
+
       const { data, error } = await supabase.functions.invoke("publish-blog", {
-        body: {
-          items: selectedPosts.map((p) => ({
-            id: p.id,
-            title: p.title,
-            slug: p.slug,
-            json_data: p.json_data,
-          })),
-          languages,
-          translate_prompt: translatePrompt || undefined,
-          slug_prefix: "crescendia",
-          environment,
-        },
+        body: requestBody,
       });
+
+      console.log("[publish-blog] Response Headers:", data ? "OK" : "Error");
+      console.log("[publish-blog] Response Body:", JSON.stringify(data, null, 2));
 
       if (error) throw error;
 

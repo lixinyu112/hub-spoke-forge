@@ -266,3 +266,63 @@ export async function updateDocument(projectId: string, token: string, updates: 
   }
   return (await res.json())[0];
 }
+
+// Sitemap Configs
+export interface SitemapConfig {
+  id: string;
+  project_id: string;
+  base_url: string;
+  url_pattern_hub: string;
+  url_pattern_spoke: string;
+  languages: string[];
+  changefreq: string | null;
+  priority: string | null;
+  include_hub: boolean;
+}
+
+export async function getSitemapConfig(projectId: string): Promise<SitemapConfig | null> {
+  const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+  const anonKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
+  const res = await fetch(
+    `${supabaseUrl}/rest/v1/sitemap_configs?project_id=eq.${projectId}&limit=1`,
+    { headers: { apikey: anonKey, Authorization: `Bearer ${anonKey}` } }
+  );
+  if (!res.ok) return null;
+  const data = await res.json();
+  return data.length > 0 ? data[0] : null;
+}
+
+export async function upsertSitemapConfig(projectId: string, config: Omit<SitemapConfig, "id" | "project_id">) {
+  const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+  const anonKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
+  const existing = await getSitemapConfig(projectId);
+  if (existing) {
+    const res = await fetch(`${supabaseUrl}/rest/v1/sitemap_configs?id=eq.${existing.id}`, {
+      method: "PATCH",
+      headers: { apikey: anonKey, Authorization: `Bearer ${anonKey}`, "Content-Type": "application/json", Prefer: "return=representation" },
+      body: JSON.stringify(config),
+    });
+    if (!res.ok) throw new Error("Failed to update sitemap config");
+    return (await res.json())[0];
+  }
+  const res = await fetch(`${supabaseUrl}/rest/v1/sitemap_configs`, {
+    method: "POST",
+    headers: { apikey: anonKey, Authorization: `Bearer ${anonKey}`, "Content-Type": "application/json", Prefer: "return=representation" },
+    body: JSON.stringify({ ...config, project_id: projectId }),
+  });
+  if (!res.ok) throw new Error("Failed to create sitemap config");
+  return (await res.json())[0];
+}
+  const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+  const anonKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
+  const res = await fetch(`${supabaseUrl}/rest/v1/documents?project_id=eq.${projectId}&token=eq.${token}`, {
+    method: "PATCH",
+    headers: { apikey: anonKey, Authorization: `Bearer ${anonKey}`, "Content-Type": "application/json", Prefer: "return=representation" },
+    body: JSON.stringify(updates),
+  });
+  if (!res.ok) {
+    const err = await res.text();
+    throw new Error(`更新文档失败: ${err}`);
+  }
+  return (await res.json())[0];
+}

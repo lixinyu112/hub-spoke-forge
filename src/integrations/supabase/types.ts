@@ -361,6 +361,56 @@ export type Database = {
           },
         ]
       }
+      sitemap_configs: {
+        Row: {
+          base_url: string
+          changefreq: string | null
+          created_at: string
+          id: string
+          include_hub: boolean
+          languages: Json
+          priority: string | null
+          project_id: string
+          updated_at: string
+          url_pattern_hub: string
+          url_pattern_spoke: string
+        }
+        Insert: {
+          base_url?: string
+          changefreq?: string | null
+          created_at?: string
+          id?: string
+          include_hub?: boolean
+          languages?: Json
+          priority?: string | null
+          project_id: string
+          updated_at?: string
+          url_pattern_hub?: string
+          url_pattern_spoke?: string
+        }
+        Update: {
+          base_url?: string
+          changefreq?: string | null
+          created_at?: string
+          id?: string
+          include_hub?: boolean
+          languages?: Json
+          priority?: string | null
+          project_id?: string
+          updated_at?: string
+          url_pattern_hub?: string
+          url_pattern_spoke?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sitemap_configs_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: true
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       spokes: {
         Row: {
           created_at: string

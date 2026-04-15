@@ -454,10 +454,16 @@ export default function ContentBrowser() {
                   <div className="space-y-3 p-4">
                     <div className="flex items-center justify-between">
                       <p className="text-xs text-muted-foreground">主题信息</p>
-                      <Button size="sm" variant="outline" className="gap-1.5 text-xs" onClick={openEditThemeDialog}>
-                        <Pencil className="h-3 w-3" />
-                        修改
-                      </Button>
+                      <div className="flex items-center gap-2">
+                        <Button size="sm" variant="outline" className="gap-1.5 text-xs" onClick={openEditThemeDialog}>
+                          <Pencil className="h-3 w-3" />
+                          修改
+                        </Button>
+                        <Button size="sm" variant="outline" className="gap-1.5 text-xs" onClick={() => setSitemapDialogOpen(true)}>
+                          <FileCode className="h-3 w-3" />
+                          Sitemap
+                        </Button>
+                      </div>
                     </div>
                     <div><p className="text-xs text-muted-foreground">名称</p><p className="text-sm font-medium">{selectedNode.data.name}</p></div>
                     <div><p className="text-xs text-muted-foreground">飞书文档 ID</p><p className="text-sm font-mono">{selectedNode.data.feishu_doc_token || "—"}</p></div>

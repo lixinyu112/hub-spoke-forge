@@ -571,7 +571,60 @@ export default function BlogProcessor() {
     }
   };
 
+  // Group posts by group for display
   const filteredPosts = posts;
+  const groupedPostsList = (() => {
+    if (selectedGroup !== "all") return null;
+    const grouped: { groupId: string | null; groupName: string; posts: BlogPost[] }[] = [];
+    const byGroup: Record<string, BlogPost[]> = {};
+    for (const p of filteredPosts) {
+      const key = p.group_id || "_ungrouped";
+      if (!byGroup[key]) byGroup[key] = [];
+      byGroup[key].push(p);
+    }
+    for (const g of groups) {
+      const gPosts = byGroup[g.id];
+      if (gPosts && gPosts.length > 0) {
+        grouped.push({ groupId: g.id, groupName: g.name, posts: gPosts });
+      }
+    }
+    const ungrouped = byGroup["_ungrouped"];
+    if (ungrouped && ungrouped.length > 0) {
+      grouped.push({ groupId: null, groupName: "未分组", posts: ungrouped });
+    }
+    return grouped;
+  })();
+
+  const renderPostItem = (post: BlogPost) => (
+    <div
+      key={post.id}
+      className={`flex items-center gap-2 p-2 rounded-md border cursor-pointer transition-colors ${
+        selectedPost?.id === post.id ? "border-primary bg-primary/5" : "border-transparent hover:bg-muted/50 hover:border-border"
+      }`}
+    >
+      <Checkbox
+        checked={selectedPostIds.has(post.id)}
+        onCheckedChange={() => togglePostSelection(post.id)}
+      />
+      <div className="flex-1 min-w-0" onClick={() => handleSelectPost(post)}>
+        <div className="flex items-center gap-1.5 flex-wrap">
+          <span className="text-sm truncate">{post.title}</span>
+          <Badge
+            variant={post.status === "published" ? "default" : post.status === "error" ? "destructive" : "secondary"}
+            className="text-[9px] shrink-0"
+          >
+            {post.status === "published" ? "已发布" : post.status === "error" ? "错误" : "草稿"}
+          </Badge>
+        </div>
+        {post.original_filename && (
+          <p className="text-[10px] text-muted-foreground font-mono truncate">{post.original_filename}</p>
+        )}
+      </div>
+      <Button variant="ghost" size="sm" className="h-6 w-6 p-0 shrink-0" onClick={() => handleDeletePost(post.id)}>
+        <Trash2 className="h-3 w-3 text-muted-foreground hover:text-destructive" />
+      </Button>
+    </div>
+  );
 
   return (
     <div className="p-6 h-full flex flex-col gap-4">
@@ -849,46 +902,22 @@ export default function BlogProcessor() {
             <CardContent className="flex-1 min-h-0">
               <ScrollArea className="h-full">
                 <div className="space-y-1">
-                  {filteredPosts.map((post) => (
-                    <div
-                      key={post.id}
-                      className={`flex items-center gap-2 p-2 rounded-md border cursor-pointer transition-colors ${
-                        selectedPost?.id === post.id ? "border-primary bg-primary/5" : "border-transparent hover:bg-muted/50 hover:border-border"
-                      }`}
-                    >
-                      <Checkbox
-                        checked={selectedPostIds.has(post.id)}
-                        onCheckedChange={() => togglePostSelection(post.id)}
-                      />
-                      <div className="flex-1 min-w-0" onClick={() => handleSelectPost(post)}>
-                        <div className="flex items-center gap-1.5 flex-wrap">
-                          <span className="text-sm truncate">{post.title}</span>
-                          {post.group_id && groupMap[post.group_id] && (
-                            <Badge variant="outline" className="text-[9px] shrink-0 bg-muted/50">
-                              {groupMap[post.group_id]}
-                            </Badge>
-                          )}
-                          {!post.group_id && (
-                            <Badge variant="outline" className="text-[9px] shrink-0 text-muted-foreground border-dashed">
-                              未分组
-                            </Badge>
-                          )}
-                          <Badge
-                            variant={post.status === "published" ? "default" : post.status === "error" ? "destructive" : "secondary"}
-                            className="text-[9px] shrink-0"
-                          >
-                            {post.status === "published" ? "已发布" : post.status === "error" ? "错误" : "草稿"}
-                          </Badge>
+                  {groupedPostsList ? (
+                    /* Grouped view when "all" is selected */
+                    groupedPostsList.map((section) => (
+                      <div key={section.groupId || "_ungrouped"} className="mb-3">
+                        <div className="flex items-center gap-2 px-1 py-1.5 sticky top-0 bg-background/95 backdrop-blur-sm z-10 border-b">
+                          <FolderPlus className="h-3.5 w-3.5 text-primary" />
+                          <span className="text-xs font-semibold text-primary">{section.groupName}</span>
+                          <Badge variant="secondary" className="text-[9px]">{section.posts.length}</Badge>
                         </div>
-                        {post.original_filename && (
-                          <p className="text-[10px] text-muted-foreground font-mono truncate">{post.original_filename}</p>
-                        )}
+                        {section.posts.map((post) => renderPostItem(post))}
                       </div>
-                      <Button variant="ghost" size="sm" className="h-6 w-6 p-0 shrink-0" onClick={() => handleDeletePost(post.id)}>
-                        <Trash2 className="h-3 w-3 text-muted-foreground hover:text-destructive" />
-                      </Button>
-                    </div>
-                  ))}
+                    ))
+                  ) : (
+                    /* Flat list when a specific group is selected */
+                    filteredPosts.map((post) => renderPostItem(post))
+                  )}
                   {filteredPosts.length === 0 && (
                     <p className="text-sm text-muted-foreground text-center py-4">暂无 Blog 内容，请上传 MDX 文件进行转换</p>
                   )}

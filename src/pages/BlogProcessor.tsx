@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from "react";
-import { FileText, FolderPlus, Trash2, Loader2, Globe, X, FileJson, Upload } from "lucide-react";
+import { FileText, FolderPlus, Trash2, Loader2, Globe, X, FileJson, Upload, Map } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -25,6 +25,7 @@ import { loadPromptConfig, savePromptConfig } from "@/lib/promptConfig";
 import { createPublication } from "@/lib/api";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
+import { BlogSitemapDialog } from "@/components/BlogSitemapDialog";
 
 interface MdxFile {
   name: string;
@@ -118,6 +119,8 @@ export default function BlogProcessor() {
   const [publishing, setPublishing] = useState(false);
   const [publishReport, setPublishReport] = useState<PublishReportData | null>(null);
   const [publishProgress, setPublishProgress] = useState<{ total: number; done: number } | null>(null);
+  const [sitemapOpen, setSitemapOpen] = useState(false);
+  const [allPosts, setAllPosts] = useState<BlogPost[]>([]);
 
   // Load data
   useEffect(() => {
@@ -144,6 +147,8 @@ export default function BlogProcessor() {
     setGroups(g);
   };
 
+  const groupMap = Object.fromEntries(groups.map((g) => [g.id, g.name]));
+
   const loadPosts = async () => {
     if (!currentProject) return;
     const gid = selectedGroup === "all" ? undefined : selectedGroup === "ungrouped" ? undefined : selectedGroup;
@@ -152,6 +157,13 @@ export default function BlogProcessor() {
       p = p.filter((post) => !post.group_id);
     }
     setPosts(p);
+    // Also load all posts for sitemap
+    if (selectedGroup !== "all") {
+      const all = await getBlogPosts(currentProject.id);
+      setAllPosts(all);
+    } else {
+      setAllPosts(p);
+    }
   };
 
   const handleSavePrompt = (val: string) => {
@@ -820,12 +832,18 @@ export default function BlogProcessor() {
                   />
                   <CardTitle className="text-base">Blog 列表 ({filteredPosts.length})</CardTitle>
                 </div>
-                {selectedPostIds.size > 0 && (
-                  <Button size="sm" className="gap-1" onClick={() => { setPublishOpen(true); setPublishReport(null); }}>
-                    <Globe className="h-3.5 w-3.5" />
-                    发布 ({selectedPostIds.size})
+                <div className="flex items-center gap-1.5">
+                  <Button variant="outline" size="sm" className="gap-1" onClick={() => setSitemapOpen(true)}>
+                    <Map className="h-3.5 w-3.5" />
+                    Sitemap
                   </Button>
-                )}
+                  {selectedPostIds.size > 0 && (
+                    <Button size="sm" className="gap-1" onClick={() => { setPublishOpen(true); setPublishReport(null); }}>
+                      <Globe className="h-3.5 w-3.5" />
+                      发布 ({selectedPostIds.size})
+                    </Button>
+                  )}
+                </div>
               </div>
             </CardHeader>
             <CardContent className="flex-1 min-h-0">
@@ -843,8 +861,18 @@ export default function BlogProcessor() {
                         onCheckedChange={() => togglePostSelection(post.id)}
                       />
                       <div className="flex-1 min-w-0" onClick={() => handleSelectPost(post)}>
-                        <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-1.5 flex-wrap">
                           <span className="text-sm truncate">{post.title}</span>
+                          {post.group_id && groupMap[post.group_id] && (
+                            <Badge variant="outline" className="text-[9px] shrink-0 bg-muted/50">
+                              {groupMap[post.group_id]}
+                            </Badge>
+                          )}
+                          {!post.group_id && (
+                            <Badge variant="outline" className="text-[9px] shrink-0 text-muted-foreground border-dashed">
+                              未分组
+                            </Badge>
+                          )}
                           <Badge
                             variant={post.status === "published" ? "default" : post.status === "error" ? "destructive" : "secondary"}
                             className="text-[9px] shrink-0"
@@ -1021,6 +1049,15 @@ export default function BlogProcessor() {
         progress={publishProgress}
         showEnvironment
         allLanguages
+      />
+
+      {/* Blog Sitemap dialog */}
+      <BlogSitemapDialog
+        open={sitemapOpen}
+        onOpenChange={setSitemapOpen}
+        groups={groups}
+        posts={allPosts.length > 0 ? allPosts : posts}
+        selectedGroupId={selectedGroup !== "all" && selectedGroup !== "ungrouped" ? selectedGroup : undefined}
       />
     </div>
   );

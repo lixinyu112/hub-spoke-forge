@@ -84,7 +84,7 @@ function extractArticleFields(post: BlogPost) {
 export default function BlogProcessor() {
   const { currentProject } = useProject();
   const [groups, setGroups] = useState<BlogGroup[]>([]);
-  const [selectedGroup, setSelectedGroup] = useState<string>("all");
+  const [selectedGroup, setSelectedGroup] = useState<string>("");
   const [uploadGroupId, setUploadGroupId] = useState<string>("");
   const [posts, setPosts] = useState<BlogPost[]>([]);
   
@@ -151,19 +151,12 @@ export default function BlogProcessor() {
 
   const loadPosts = async () => {
     if (!currentProject) return;
-    const gid = selectedGroup === "all" ? undefined : selectedGroup === "ungrouped" ? undefined : selectedGroup;
-    let p = await getBlogPosts(currentProject.id, gid);
-    if (selectedGroup === "ungrouped") {
-      p = p.filter((post) => !post.group_id);
-    }
+    if (!selectedGroup) { setPosts([]); setAllPosts([]); return; }
+    const p = await getBlogPosts(currentProject.id, selectedGroup);
     setPosts(p);
-    // Also load all posts for sitemap
-    if (selectedGroup !== "all") {
-      const all = await getBlogPosts(currentProject.id);
-      setAllPosts(all);
-    } else {
-      setAllPosts(p);
-    }
+    // Load all posts for sitemap
+    const all = await getBlogPosts(currentProject.id);
+    setAllPosts(all);
   };
 
   const handleSavePrompt = (val: string) => {

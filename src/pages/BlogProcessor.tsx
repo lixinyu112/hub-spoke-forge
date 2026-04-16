@@ -564,29 +564,7 @@ export default function BlogProcessor() {
     }
   };
 
-  // Group posts by group for display
   const filteredPosts = posts;
-  const groupedPostsList = (() => {
-    if (selectedGroup !== "all") return null;
-    const grouped: { groupId: string | null; groupName: string; posts: BlogPost[] }[] = [];
-    const byGroup: Record<string, BlogPost[]> = {};
-    for (const p of filteredPosts) {
-      const key = p.group_id || "_ungrouped";
-      if (!byGroup[key]) byGroup[key] = [];
-      byGroup[key].push(p);
-    }
-    for (const g of groups) {
-      const gPosts = byGroup[g.id];
-      if (gPosts && gPosts.length > 0) {
-        grouped.push({ groupId: g.id, groupName: g.name, posts: gPosts });
-      }
-    }
-    const ungrouped = byGroup["_ungrouped"];
-    if (ungrouped && ungrouped.length > 0) {
-      grouped.push({ groupId: null, groupName: "未分组", posts: ungrouped });
-    }
-    return grouped;
-  })();
 
   const renderPostItem = (post: BlogPost) => (
     <div

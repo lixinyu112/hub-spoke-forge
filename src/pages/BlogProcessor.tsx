@@ -835,8 +835,22 @@ export default function BlogProcessor() {
                         setSelectedPostIds(new Set());
                       }
                     }}
+                    disabled={!selectedGroup}
                   />
-                  <CardTitle className="text-base">Blog 列表 ({filteredPosts.length})</CardTitle>
+                  <CardTitle className="text-base">Blog 列表</CardTitle>
+                  <Select value={selectedGroup} onValueChange={setSelectedGroup}>
+                    <SelectTrigger className="h-7 w-[160px] text-xs">
+                      <SelectValue placeholder="选择分组查看…" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {groups.map((g) => (
+                        <SelectItem key={g.id} value={g.id}>{g.name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  {selectedGroup && (
+                    <Badge variant="secondary" className="text-[9px]">{filteredPosts.length}</Badge>
+                  )}
                 </div>
                 <div className="flex items-center gap-1.5">
                   <Button variant="outline" size="sm" className="gap-1" onClick={() => setSitemapOpen(true)}>
@@ -853,29 +867,24 @@ export default function BlogProcessor() {
               </div>
             </CardHeader>
             <CardContent className="flex-1 min-h-0">
-              <ScrollArea className="h-full">
-                <div className="space-y-1">
-                  {groupedPostsList ? (
-                    /* Grouped view when "all" is selected */
-                    groupedPostsList.map((section) => (
-                      <div key={section.groupId || "_ungrouped"} className="mb-3">
-                        <div className="flex items-center gap-2 px-1 py-1.5 sticky top-0 bg-background/95 backdrop-blur-sm z-10 border-b">
-                          <FolderPlus className="h-3.5 w-3.5 text-primary" />
-                          <span className="text-xs font-semibold text-primary">{section.groupName}</span>
-                          <Badge variant="secondary" className="text-[9px]">{section.posts.length}</Badge>
-                        </div>
-                        {section.posts.map((post) => renderPostItem(post))}
-                      </div>
-                    ))
-                  ) : (
-                    /* Flat list when a specific group is selected */
-                    filteredPosts.map((post) => renderPostItem(post))
-                  )}
-                  {filteredPosts.length === 0 && (
-                    <p className="text-sm text-muted-foreground text-center py-4">暂无 Blog 内容，请上传 MDX 文件进行转换</p>
+              {!selectedGroup ? (
+                <div className="flex flex-col items-center justify-center h-full text-muted-foreground gap-2 py-8">
+                  <FolderPlus className="h-8 w-8 text-muted-foreground/40" />
+                  <p className="text-sm">请先选择一个分组查看 Blog 列表</p>
+                  {groups.length === 0 && (
+                    <p className="text-xs text-muted-foreground/60">尚无分组，请先在上方创建分组</p>
                   )}
                 </div>
-              </ScrollArea>
+              ) : (
+                <ScrollArea className="h-full">
+                  <div className="space-y-1">
+                    {filteredPosts.map((post) => renderPostItem(post))}
+                    {filteredPosts.length === 0 && (
+                      <p className="text-sm text-muted-foreground text-center py-4">该分组下暂无 Blog 内容</p>
+                    )}
+                  </div>
+                </ScrollArea>
+              )}
             </CardContent>
           </Card>
         </div>

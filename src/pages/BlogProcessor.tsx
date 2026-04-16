@@ -832,12 +832,18 @@ export default function BlogProcessor() {
                   />
                   <CardTitle className="text-base">Blog 列表 ({filteredPosts.length})</CardTitle>
                 </div>
-                {selectedPostIds.size > 0 && (
-                  <Button size="sm" className="gap-1" onClick={() => { setPublishOpen(true); setPublishReport(null); }}>
-                    <Globe className="h-3.5 w-3.5" />
-                    发布 ({selectedPostIds.size})
+                <div className="flex items-center gap-1.5">
+                  <Button variant="outline" size="sm" className="gap-1" onClick={() => setSitemapOpen(true)}>
+                    <Map className="h-3.5 w-3.5" />
+                    Sitemap
                   </Button>
-                )}
+                  {selectedPostIds.size > 0 && (
+                    <Button size="sm" className="gap-1" onClick={() => { setPublishOpen(true); setPublishReport(null); }}>
+                      <Globe className="h-3.5 w-3.5" />
+                      发布 ({selectedPostIds.size})
+                    </Button>
+                  )}
+                </div>
               </div>
             </CardHeader>
             <CardContent className="flex-1 min-h-0">
@@ -855,8 +861,18 @@ export default function BlogProcessor() {
                         onCheckedChange={() => togglePostSelection(post.id)}
                       />
                       <div className="flex-1 min-w-0" onClick={() => handleSelectPost(post)}>
-                        <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-1.5 flex-wrap">
                           <span className="text-sm truncate">{post.title}</span>
+                          {post.group_id && groupMap[post.group_id] && (
+                            <Badge variant="outline" className="text-[9px] shrink-0 bg-muted/50">
+                              {groupMap[post.group_id]}
+                            </Badge>
+                          )}
+                          {!post.group_id && (
+                            <Badge variant="outline" className="text-[9px] shrink-0 text-muted-foreground border-dashed">
+                              未分组
+                            </Badge>
+                          )}
                           <Badge
                             variant={post.status === "published" ? "default" : post.status === "error" ? "destructive" : "secondary"}
                             className="text-[9px] shrink-0"

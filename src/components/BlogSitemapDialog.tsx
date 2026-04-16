@@ -21,7 +21,7 @@ interface BlogSitemapDialogProps {
 
 export function BlogSitemapDialog({ open, onOpenChange, groups, posts, selectedGroupId }: BlogSitemapDialogProps) {
   const [baseUrl, setBaseUrl] = useState("");
-  const [urlPattern, setUrlPattern] = useState("/{lang}/blog/{group}/{slug}");
+  const [urlPattern, setUrlPattern] = useState("/{lang}/blog/{slug}");
   const [languages, setLanguages] = useState<string[]>(["zh", "en", "es", "ko", "ru", "pt", "ja"]);
   const [changefreq, setChangefreq] = useState<string | null>(null);
   const [priority, setPriority] = useState<string | null>(null);
@@ -144,7 +144,7 @@ export function BlogSitemapDialog({ open, onOpenChange, groups, posts, selectedG
               onChange={(e) => setUrlPattern(e.target.value)}
             />
             <p className="text-xs text-muted-foreground">
-              可用变量：{"{lang}"}, {"{group}"}, {"{slug}"} — 示例：/{"{lang}"}/blog/{"{group}"}/{"{slug}"}
+              可用变量：{"{lang}"}, {"{slug}"}, {"{group}"} — 示例：/{"{lang}"}/blog/{"{slug}"}
             </p>
           </div>
 

@@ -571,7 +571,30 @@ export default function BlogProcessor() {
     }
   };
 
+  // Group posts by group for display
   const filteredPosts = posts;
+  const groupedPostsList = (() => {
+    if (selectedGroup !== "all") return null; // already filtered by group
+    const grouped: { groupId: string | null; groupName: string; posts: BlogPost[] }[] = [];
+    const byGroup = new Map<string | null, BlogPost[]>();
+    for (const p of filteredPosts) {
+      const key = p.group_id || null;
+      if (!byGroup.has(key)) byGroup.set(key, []);
+      byGroup.get(key)!.push(p);
+    }
+    // Show named groups first, then ungrouped
+    for (const g of groups) {
+      const gPosts = byGroup.get(g.id);
+      if (gPosts && gPosts.length > 0) {
+        grouped.push({ groupId: g.id, groupName: g.name, posts: gPosts });
+      }
+    }
+    const ungrouped = byGroup.get(null);
+    if (ungrouped && ungrouped.length > 0) {
+      grouped.push({ groupId: null, groupName: "未分组", posts: ungrouped });
+    }
+    return grouped;
+  })();
 
   return (
     <div className="p-6 h-full flex flex-col gap-4">

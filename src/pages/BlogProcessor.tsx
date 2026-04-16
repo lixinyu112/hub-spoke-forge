@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from "react";
-import { FileText, FolderPlus, Trash2, Loader2, Globe, X, FileJson, Upload } from "lucide-react";
+import { FileText, FolderPlus, Trash2, Loader2, Globe, X, FileJson, Upload, Map } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -25,6 +25,7 @@ import { loadPromptConfig, savePromptConfig } from "@/lib/promptConfig";
 import { createPublication } from "@/lib/api";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
+import { BlogSitemapDialog } from "@/components/BlogSitemapDialog";
 
 interface MdxFile {
   name: string;
@@ -118,6 +119,8 @@ export default function BlogProcessor() {
   const [publishing, setPublishing] = useState(false);
   const [publishReport, setPublishReport] = useState<PublishReportData | null>(null);
   const [publishProgress, setPublishProgress] = useState<{ total: number; done: number } | null>(null);
+  const [sitemapOpen, setSitemapOpen] = useState(false);
+  const [allPosts, setAllPosts] = useState<BlogPost[]>([]);
 
   // Load data
   useEffect(() => {

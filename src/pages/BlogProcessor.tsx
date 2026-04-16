@@ -147,6 +147,8 @@ export default function BlogProcessor() {
     setGroups(g);
   };
 
+  const groupMap = Object.fromEntries(groups.map((g) => [g.id, g.name]));
+
   const loadPosts = async () => {
     if (!currentProject) return;
     const gid = selectedGroup === "all" ? undefined : selectedGroup === "ungrouped" ? undefined : selectedGroup;
@@ -155,6 +157,13 @@ export default function BlogProcessor() {
       p = p.filter((post) => !post.group_id);
     }
     setPosts(p);
+    // Also load all posts for sitemap
+    if (selectedGroup !== "all") {
+      const all = await getBlogPosts(currentProject.id);
+      setAllPosts(all);
+    } else {
+      setAllPosts(p);
+    }
   };
 
   const handleSavePrompt = (val: string) => {

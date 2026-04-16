@@ -147,7 +147,7 @@ export default function BlogProcessor() {
     setGroups(g);
   };
 
-  const groupMap = Object.fromEntries(groups.map((g) => [g.id, g.name]));
+  
 
   const loadPosts = async () => {
     if (!currentProject) return;

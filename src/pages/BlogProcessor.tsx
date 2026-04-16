@@ -595,6 +595,37 @@ export default function BlogProcessor() {
     return grouped;
   })();
 
+  const renderPostItem = (post: BlogPost) => (
+    <div
+      key={post.id}
+      className={`flex items-center gap-2 p-2 rounded-md border cursor-pointer transition-colors ${
+        selectedPost?.id === post.id ? "border-primary bg-primary/5" : "border-transparent hover:bg-muted/50 hover:border-border"
+      }`}
+    >
+      <Checkbox
+        checked={selectedPostIds.has(post.id)}
+        onCheckedChange={() => togglePostSelection(post.id)}
+      />
+      <div className="flex-1 min-w-0" onClick={() => handleSelectPost(post)}>
+        <div className="flex items-center gap-1.5 flex-wrap">
+          <span className="text-sm truncate">{post.title}</span>
+          <Badge
+            variant={post.status === "published" ? "default" : post.status === "error" ? "destructive" : "secondary"}
+            className="text-[9px] shrink-0"
+          >
+            {post.status === "published" ? "已发布" : post.status === "error" ? "错误" : "草稿"}
+          </Badge>
+        </div>
+        {post.original_filename && (
+          <p className="text-[10px] text-muted-foreground font-mono truncate">{post.original_filename}</p>
+        )}
+      </div>
+      <Button variant="ghost" size="sm" className="h-6 w-6 p-0 shrink-0" onClick={() => handleDeletePost(post.id)}>
+        <Trash2 className="h-3 w-3 text-muted-foreground hover:text-destructive" />
+      </Button>
+    </div>
+  );
+
   return (
     <div className="p-6 h-full flex flex-col gap-4">
       <div>

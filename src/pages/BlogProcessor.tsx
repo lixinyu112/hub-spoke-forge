@@ -84,7 +84,7 @@ function extractArticleFields(post: BlogPost) {
 export default function BlogProcessor() {
   const { currentProject } = useProject();
   const [groups, setGroups] = useState<BlogGroup[]>([]);
-  const [selectedGroup, setSelectedGroup] = useState<string>("all");
+  const [selectedGroup, setSelectedGroup] = useState<string>("");
   const [uploadGroupId, setUploadGroupId] = useState<string>("");
   const [posts, setPosts] = useState<BlogPost[]>([]);
   
@@ -147,23 +147,16 @@ export default function BlogProcessor() {
     setGroups(g);
   };
 
-  const groupMap = Object.fromEntries(groups.map((g) => [g.id, g.name]));
+  
 
   const loadPosts = async () => {
     if (!currentProject) return;
-    const gid = selectedGroup === "all" ? undefined : selectedGroup === "ungrouped" ? undefined : selectedGroup;
-    let p = await getBlogPosts(currentProject.id, gid);
-    if (selectedGroup === "ungrouped") {
-      p = p.filter((post) => !post.group_id);
-    }
+    if (!selectedGroup) { setPosts([]); setAllPosts([]); return; }
+    const p = await getBlogPosts(currentProject.id, selectedGroup);
     setPosts(p);
-    // Also load all posts for sitemap
-    if (selectedGroup !== "all") {
-      const all = await getBlogPosts(currentProject.id);
-      setAllPosts(all);
-    } else {
-      setAllPosts(p);
-    }
+    // Load all posts for sitemap
+    const all = await getBlogPosts(currentProject.id);
+    setAllPosts(all);
   };
 
   const handleSavePrompt = (val: string) => {
@@ -571,29 +564,7 @@ export default function BlogProcessor() {
     }
   };
 
-  // Group posts by group for display
   const filteredPosts = posts;
-  const groupedPostsList = (() => {
-    if (selectedGroup !== "all") return null;
-    const grouped: { groupId: string | null; groupName: string; posts: BlogPost[] }[] = [];
-    const byGroup: Record<string, BlogPost[]> = {};
-    for (const p of filteredPosts) {
-      const key = p.group_id || "_ungrouped";
-      if (!byGroup[key]) byGroup[key] = [];
-      byGroup[key].push(p);
-    }
-    for (const g of groups) {
-      const gPosts = byGroup[g.id];
-      if (gPosts && gPosts.length > 0) {
-        grouped.push({ groupId: g.id, groupName: g.name, posts: gPosts });
-      }
-    }
-    const ungrouped = byGroup["_ungrouped"];
-    if (ungrouped && ungrouped.length > 0) {
-      grouped.push({ groupId: null, groupName: "未分组", posts: ungrouped });
-    }
-    return grouped;
-  })();
 
   const renderPostItem = (post: BlogPost) => (
     <div
@@ -654,44 +625,26 @@ export default function BlogProcessor() {
               </div>
               <p className="text-xs text-muted-foreground mt-1">所有 Blog 必须归属于一个分组</p>
             </CardHeader>
-            <CardContent className="space-y-3">
-              {/* Filter selector */}
-              <div>
-                <p className="text-[11px] font-medium text-muted-foreground mb-1">筛选查看</p>
-                <Select value={selectedGroup} onValueChange={setSelectedGroup}>
-                  <SelectTrigger className="h-8">
-                    <SelectValue placeholder="选择分组…" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">全部</SelectItem>
-                    <SelectItem value="ungrouped">未分组</SelectItem>
-                    {groups.map((g) => (
-                      <SelectItem key={g.id} value={g.id}>{g.name}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              {groups.length > 0 && (
+            <CardContent>
+              {groups.length > 0 ? (
                 <div className="flex flex-wrap gap-1.5">
                   {groups.map((g) => (
                     <Badge
                       key={g.id}
-                      variant={selectedGroup === g.id ? "default" : "outline"}
-                      className="cursor-pointer gap-1 text-[11px] py-1 px-2"
-                      onClick={() => setSelectedGroup(g.id)}
+                      variant="outline"
+                      className="gap-1 text-[11px] py-1 px-2"
                     >
                       {g.name}
                       <button
                         className="ml-1 hover:text-destructive"
-                        onClick={(e) => { e.stopPropagation(); handleDeleteGroup(g.id); }}
+                        onClick={() => handleDeleteGroup(g.id)}
                       >
                         <X className="h-2.5 w-2.5" />
                       </button>
                     </Badge>
                   ))}
                 </div>
-              )}
-              {groups.length === 0 && (
+              ) : (
                 <p className="text-xs text-muted-foreground italic text-center py-2">暂无分组，请先创建分组再上传文件</p>
               )}
             </CardContent>
@@ -882,8 +835,22 @@ export default function BlogProcessor() {
                         setSelectedPostIds(new Set());
                       }
                     }}
+                    disabled={!selectedGroup}
                   />
-                  <CardTitle className="text-base">Blog 列表 ({filteredPosts.length})</CardTitle>
+                  <CardTitle className="text-base">Blog 列表</CardTitle>
+                  <Select value={selectedGroup} onValueChange={setSelectedGroup}>
+                    <SelectTrigger className="h-7 w-[160px] text-xs">
+                      <SelectValue placeholder="选择分组查看…" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {groups.map((g) => (
+                        <SelectItem key={g.id} value={g.id}>{g.name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  {selectedGroup && (
+                    <Badge variant="secondary" className="text-[9px]">{filteredPosts.length}</Badge>
+                  )}
                 </div>
                 <div className="flex items-center gap-1.5">
                   <Button variant="outline" size="sm" className="gap-1" onClick={() => setSitemapOpen(true)}>
@@ -900,29 +867,24 @@ export default function BlogProcessor() {
               </div>
             </CardHeader>
             <CardContent className="flex-1 min-h-0">
-              <ScrollArea className="h-full">
-                <div className="space-y-1">
-                  {groupedPostsList ? (
-                    /* Grouped view when "all" is selected */
-                    groupedPostsList.map((section) => (
-                      <div key={section.groupId || "_ungrouped"} className="mb-3">
-                        <div className="flex items-center gap-2 px-1 py-1.5 sticky top-0 bg-background/95 backdrop-blur-sm z-10 border-b">
-                          <FolderPlus className="h-3.5 w-3.5 text-primary" />
-                          <span className="text-xs font-semibold text-primary">{section.groupName}</span>
-                          <Badge variant="secondary" className="text-[9px]">{section.posts.length}</Badge>
-                        </div>
-                        {section.posts.map((post) => renderPostItem(post))}
-                      </div>
-                    ))
-                  ) : (
-                    /* Flat list when a specific group is selected */
-                    filteredPosts.map((post) => renderPostItem(post))
-                  )}
-                  {filteredPosts.length === 0 && (
-                    <p className="text-sm text-muted-foreground text-center py-4">暂无 Blog 内容，请上传 MDX 文件进行转换</p>
+              {!selectedGroup ? (
+                <div className="flex flex-col items-center justify-center h-full text-muted-foreground gap-2 py-8">
+                  <FolderPlus className="h-8 w-8 text-muted-foreground/40" />
+                  <p className="text-sm">请先选择一个分组查看 Blog 列表</p>
+                  {groups.length === 0 && (
+                    <p className="text-xs text-muted-foreground/60">尚无分组，请先在上方创建分组</p>
                   )}
                 </div>
-              </ScrollArea>
+              ) : (
+                <ScrollArea className="h-full">
+                  <div className="space-y-1">
+                    {filteredPosts.map((post) => renderPostItem(post))}
+                    {filteredPosts.length === 0 && (
+                      <p className="text-sm text-muted-foreground text-center py-4">该分组下暂无 Blog 内容</p>
+                    )}
+                  </div>
+                </ScrollArea>
+              )}
             </CardContent>
           </Card>
         </div>

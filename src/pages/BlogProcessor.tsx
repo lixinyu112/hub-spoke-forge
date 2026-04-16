@@ -576,7 +576,7 @@ export default function BlogProcessor() {
   const groupedPostsList = (() => {
     if (selectedGroup !== "all") return null; // already filtered by group
     const grouped: { groupId: string | null; groupName: string; posts: BlogPost[] }[] = [];
-    const byGroup = new Map<string | null, BlogPost[]>();
+    const byGroup: Record<string, BlogPost[]> = {};
     for (const p of filteredPosts) {
       const key = p.group_id || null;
       if (!byGroup.has(key)) byGroup.set(key, []);

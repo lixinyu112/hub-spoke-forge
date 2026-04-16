@@ -84,6 +84,7 @@ export default function BlogProcessor() {
   const { currentProject } = useProject();
   const [groups, setGroups] = useState<BlogGroup[]>([]);
   const [selectedGroup, setSelectedGroup] = useState<string>("all");
+  const [uploadGroupId, setUploadGroupId] = useState<string>("");
   const [posts, setPosts] = useState<BlogPost[]>([]);
   
   const [prompt, setPrompt] = useState("");
@@ -343,7 +344,12 @@ export default function BlogProcessor() {
     const total = pendingMdxFiles.length;
     setProcessProgress({ total, done: 0 });
 
-    const groupId = selectedGroup !== "all" && selectedGroup !== "ungrouped" ? selectedGroup : undefined;
+    if (!uploadGroupId) {
+      toast({ title: "请先选择目标分组", variant: "destructive" });
+      setProcessing(false);
+      return;
+    }
+    const groupId = uploadGroupId;
     let done = 0;
     const CONCURRENCY = 3; // Process 3 files in parallel
 
@@ -568,37 +574,45 @@ export default function BlogProcessor() {
       <div className="flex-1 grid lg:grid-cols-2 gap-4 min-h-0">
         {/* Left panel: Upload & Posts list */}
         <div className="flex flex-col gap-4 overflow-auto">
-          {/* Group management */}
-          <Card>
-            <CardHeader className="pb-3">
+          {/* Group management - prominent */}
+          <Card className="border-primary/30 bg-primary/5">
+            <CardHeader className="pb-2">
               <div className="flex items-center justify-between">
-                <CardTitle className="text-base">分组管理</CardTitle>
+                <CardTitle className="text-base flex items-center gap-2">
+                  <FolderPlus className="h-4 w-4 text-primary" />
+                  分组管理
+                </CardTitle>
                 <Button variant="outline" size="sm" className="gap-1" onClick={() => setShowGroupDialog(true)}>
                   <FolderPlus className="h-3.5 w-3.5" />
                   新建分组
                 </Button>
               </div>
+              <p className="text-xs text-muted-foreground mt-1">所有 Blog 必须归属于一个分组</p>
             </CardHeader>
-            <CardContent>
-              <Select value={selectedGroup} onValueChange={setSelectedGroup}>
-                <SelectTrigger>
-                  <SelectValue placeholder="选择分组…" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">全部</SelectItem>
-                  <SelectItem value="ungrouped">未分组</SelectItem>
-                  {groups.map((g) => (
-                    <SelectItem key={g.id} value={g.id}>{g.name}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+            <CardContent className="space-y-3">
+              {/* Filter selector */}
+              <div>
+                <p className="text-[11px] font-medium text-muted-foreground mb-1">筛选查看</p>
+                <Select value={selectedGroup} onValueChange={setSelectedGroup}>
+                  <SelectTrigger className="h-8">
+                    <SelectValue placeholder="选择分组…" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">全部</SelectItem>
+                    <SelectItem value="ungrouped">未分组</SelectItem>
+                    {groups.map((g) => (
+                      <SelectItem key={g.id} value={g.id}>{g.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
               {groups.length > 0 && (
-                <div className="flex flex-wrap gap-1 mt-2">
+                <div className="flex flex-wrap gap-1.5">
                   {groups.map((g) => (
                     <Badge
                       key={g.id}
                       variant={selectedGroup === g.id ? "default" : "outline"}
-                      className="cursor-pointer gap-1 text-[10px]"
+                      className="cursor-pointer gap-1 text-[11px] py-1 px-2"
                       onClick={() => setSelectedGroup(g.id)}
                     >
                       {g.name}
@@ -612,6 +626,9 @@ export default function BlogProcessor() {
                   ))}
                 </div>
               )}
+              {groups.length === 0 && (
+                <p className="text-xs text-muted-foreground italic text-center py-2">暂无分组，请先创建分组再上传文件</p>
+              )}
             </CardContent>
           </Card>
 
@@ -621,6 +638,27 @@ export default function BlogProcessor() {
               <CardTitle className="text-base">上传与转换</CardTitle>
             </CardHeader>
             <CardContent className="space-y-3">
+              {/* Target group selector for upload */}
+              <div>
+                <p className="text-[11px] font-medium text-muted-foreground mb-1">目标分组 <span className="text-destructive">*</span></p>
+                <Select value={uploadGroupId} onValueChange={setUploadGroupId}>
+                  <SelectTrigger className={`h-8 ${!uploadGroupId ? "border-destructive/50" : ""}`}>
+                    <SelectValue placeholder="请选择上传目标分组…" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {groups.map((g) => (
+                      <SelectItem key={g.id} value={g.id}>{g.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                {!uploadGroupId && groups.length > 0 && (
+                  <p className="text-[10px] text-destructive mt-1">请选择分组后再上传文件</p>
+                )}
+                {groups.length === 0 && (
+                  <p className="text-[10px] text-destructive mt-1">请先创建分组</p>
+                )}
+              </div>
+
               {/* Drag & Drop zone */}
               <div
                 onDragOver={handleDragOver}
@@ -757,7 +795,7 @@ export default function BlogProcessor() {
               <Button
                 onClick={handleProcessAll}
                 className="w-full gap-2"
-                disabled={processing || pendingMdxFiles.length === 0}
+                disabled={processing || pendingMdxFiles.length === 0 || !uploadGroupId}
               >
                 {processing ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileText className="h-4 w-4" />}
                 {processing ? "处理中…" : `批量转换 (${pendingMdxFiles.length} 个文件)`}

@@ -1050,6 +1050,15 @@ export default function BlogProcessor() {
         showEnvironment
         allLanguages
       />
+
+      {/* Blog Sitemap dialog */}
+      <BlogSitemapDialog
+        open={sitemapOpen}
+        onOpenChange={setSitemapOpen}
+        groups={groups}
+        posts={allPosts.length > 0 ? allPosts : posts}
+        selectedGroupId={selectedGroup !== "all" && selectedGroup !== "ungrouped" ? selectedGroup : undefined}
+      />
     </div>
   );
 }

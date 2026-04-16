@@ -625,44 +625,26 @@ export default function BlogProcessor() {
               </div>
               <p className="text-xs text-muted-foreground mt-1">所有 Blog 必须归属于一个分组</p>
             </CardHeader>
-            <CardContent className="space-y-3">
-              {/* Filter selector */}
-              <div>
-                <p className="text-[11px] font-medium text-muted-foreground mb-1">筛选查看</p>
-                <Select value={selectedGroup} onValueChange={setSelectedGroup}>
-                  <SelectTrigger className="h-8">
-                    <SelectValue placeholder="选择分组…" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">全部</SelectItem>
-                    <SelectItem value="ungrouped">未分组</SelectItem>
-                    {groups.map((g) => (
-                      <SelectItem key={g.id} value={g.id}>{g.name}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              {groups.length > 0 && (
+            <CardContent>
+              {groups.length > 0 ? (
                 <div className="flex flex-wrap gap-1.5">
                   {groups.map((g) => (
                     <Badge
                       key={g.id}
-                      variant={selectedGroup === g.id ? "default" : "outline"}
-                      className="cursor-pointer gap-1 text-[11px] py-1 px-2"
-                      onClick={() => setSelectedGroup(g.id)}
+                      variant="outline"
+                      className="gap-1 text-[11px] py-1 px-2"
                     >
                       {g.name}
                       <button
                         className="ml-1 hover:text-destructive"
-                        onClick={(e) => { e.stopPropagation(); handleDeleteGroup(g.id); }}
+                        onClick={() => handleDeleteGroup(g.id)}
                       >
                         <X className="h-2.5 w-2.5" />
                       </button>
                     </Badge>
                   ))}
                 </div>
-              )}
-              {groups.length === 0 && (
+              ) : (
                 <p className="text-xs text-muted-foreground italic text-center py-2">暂无分组，请先创建分组再上传文件</p>
               )}
             </CardContent>

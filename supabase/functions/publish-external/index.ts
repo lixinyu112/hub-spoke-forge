@@ -301,7 +301,9 @@ serve(async (req) => {
   }
 
   try {
-    const { items, languages, translate_prompt } = await req.json();
+    const { items, languages, translate_prompt, translate } = await req.json();
+    // 默认开启翻译以保持向后兼容；显式传 false 时跳过翻译，按原始 JSON 发布
+    const shouldTranslate = translate !== false;
 
     if (!items?.length || !languages?.length) {
       return new Response(
@@ -335,8 +337,10 @@ serve(async (req) => {
         const sign = md5(baseString);
 
         try {
-          // Translate JSON content to target language using custom or default prompt
-          const translatedData = await translateJson(item.json_data, lang, translate_prompt);
+          // 根据开关决定是否翻译；关闭翻译时直接使用原始 JSON 数据
+          const translatedData = shouldTranslate
+            ? await translateJson(item.json_data, lang, translate_prompt)
+            : item.json_data;
 
           const resp = await fetch(url, {
             method: "POST",

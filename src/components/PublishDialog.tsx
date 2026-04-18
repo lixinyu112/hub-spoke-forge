@@ -6,6 +6,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { Switch } from "@/components/ui/switch";
 
 
 const LANGUAGES = [
@@ -30,18 +31,21 @@ interface PublishDialogProps {
   onOpenChange: (open: boolean) => void;
   selectedCount: number;
   publishing: boolean;
-  onPublish: (languages: string[], environment: string) => void;
+  onPublish: (languages: string[], environment: string, translate: boolean) => void;
   report?: PublishReportData | null;
   progress?: { total: number; done: number } | null;
   showEnvironment?: boolean;
   /** Hide language selection and always publish all languages */
   allLanguages?: boolean;
+  /** Show translate toggle (default true) */
+  showTranslateToggle?: boolean;
 }
 
-export function PublishDialog({ open, onOpenChange, selectedCount, publishing, onPublish, report, progress, showEnvironment = false, allLanguages = false }: PublishDialogProps) {
+export function PublishDialog({ open, onOpenChange, selectedCount, publishing, onPublish, report, progress, showEnvironment = false, allLanguages = false, showTranslateToggle = true }: PublishDialogProps) {
   const ALL_LANG_CODES = LANGUAGES.map((l) => l.code);
   const [selectedLangs, setSelectedLangs] = useState<Set<string>>(new Set(allLanguages ? ALL_LANG_CODES : ["zh"]));
   const [environment, setEnvironment] = useState<string>("staging");
+  const [translateEnabled, setTranslateEnabled] = useState<boolean>(true);
 
   const toggleLang = (code: string) => {
     setSelectedLangs((prev) => {
@@ -53,7 +57,7 @@ export function PublishDialog({ open, onOpenChange, selectedCount, publishing, o
 
   const handlePublish = () => {
     if (selectedLangs.size === 0) return;
-    onPublish(Array.from(selectedLangs), environment);
+    onPublish(Array.from(selectedLangs), environment, translateEnabled);
   };
 
   // Show report view when report is available
@@ -164,6 +168,19 @@ export function PublishDialog({ open, onOpenChange, selectedCount, publishing, o
               </label>
             </div>
           </div>
+          )}
+          {showTranslateToggle && (
+            <div className="flex items-start justify-between gap-3 p-3 rounded-md border">
+              <div className="space-y-0.5">
+                <Label className="text-sm font-medium">启用 AI 翻译</Label>
+                <p className="text-xs text-muted-foreground">
+                  {translateEnabled
+                    ? "将原始 JSON 翻译为目标语言后再发布"
+                    : "按当前 JSON 原文直接发布到所选语种（不翻译）"}
+                </p>
+              </div>
+              <Switch checked={translateEnabled} onCheckedChange={setTranslateEnabled} disabled={publishing} />
+            </div>
           )}
           {allLanguages ? (
             <div>

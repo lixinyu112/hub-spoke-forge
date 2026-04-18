@@ -459,7 +459,7 @@ export default function BlogProcessor() {
   };
 
   // Publish via Blog Import API
-  const handlePublish = async (languages: string[], environment: string) => {
+  const handlePublish = async (languages: string[], environment: string, _translate: boolean) => {
     if (!currentProject || selectedPostIds.size === 0) return;
     setPublishing(true);
     setPublishReport(null);
@@ -1040,6 +1040,7 @@ export default function BlogProcessor() {
         progress={publishProgress}
         showEnvironment
         allLanguages
+        showTranslateToggle={false}
       />
 
       {/* Blog Sitemap dialog */}

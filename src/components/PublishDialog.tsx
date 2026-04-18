@@ -57,7 +57,7 @@ export function PublishDialog({ open, onOpenChange, selectedCount, publishing, o
 
   const handlePublish = () => {
     if (selectedLangs.size === 0) return;
-    onPublish(Array.from(selectedLangs), environment);
+    onPublish(Array.from(selectedLangs), environment, translateEnabled);
   };
 
   // Show report view when report is available

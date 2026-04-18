@@ -152,7 +152,7 @@ export default function ContentBrowser() {
     return items;
   };
 
-  const handlePublish = async (languages: string[]) => {
+  const handlePublish = async (languages: string[], _environment: string, translate: boolean) => {
     if (!currentProject) return;
     setPublishing(true);
     setPublishReport(null);

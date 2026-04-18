@@ -161,8 +161,8 @@ export default function ContentBrowser() {
     try {
       const items = getSelectedData();
 
-      // 加载翻译 System Prompt
-      const translatePrompt = await loadPromptConfig(currentProject.id, "translate");
+      // 加载翻译 System Prompt（仅在启用翻译时使用）
+      const translatePrompt = translate ? await loadPromptConfig(currentProject.id, "translate") : null;
 
       // 1. 存储到数据库
       const pubs = items.flatMap((item) =>

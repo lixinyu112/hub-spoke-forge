@@ -337,8 +337,10 @@ serve(async (req) => {
         const sign = md5(baseString);
 
         try {
-          // Translate JSON content to target language using custom or default prompt
-          const translatedData = await translateJson(item.json_data, lang, translate_prompt);
+          // 根据开关决定是否翻译；关闭翻译时直接使用原始 JSON 数据
+          const translatedData = shouldTranslate
+            ? await translateJson(item.json_data, lang, translate_prompt)
+            : item.json_data;
 
           const resp = await fetch(url, {
             method: "POST",

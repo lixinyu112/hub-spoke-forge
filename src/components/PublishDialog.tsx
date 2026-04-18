@@ -31,18 +31,21 @@ interface PublishDialogProps {
   onOpenChange: (open: boolean) => void;
   selectedCount: number;
   publishing: boolean;
-  onPublish: (languages: string[], environment: string) => void;
+  onPublish: (languages: string[], environment: string, translate: boolean) => void;
   report?: PublishReportData | null;
   progress?: { total: number; done: number } | null;
   showEnvironment?: boolean;
   /** Hide language selection and always publish all languages */
   allLanguages?: boolean;
+  /** Show translate toggle (default true) */
+  showTranslateToggle?: boolean;
 }
 
-export function PublishDialog({ open, onOpenChange, selectedCount, publishing, onPublish, report, progress, showEnvironment = false, allLanguages = false }: PublishDialogProps) {
+export function PublishDialog({ open, onOpenChange, selectedCount, publishing, onPublish, report, progress, showEnvironment = false, allLanguages = false, showTranslateToggle = true }: PublishDialogProps) {
   const ALL_LANG_CODES = LANGUAGES.map((l) => l.code);
   const [selectedLangs, setSelectedLangs] = useState<Set<string>>(new Set(allLanguages ? ALL_LANG_CODES : ["zh"]));
   const [environment, setEnvironment] = useState<string>("staging");
+  const [translateEnabled, setTranslateEnabled] = useState<boolean>(true);
 
   const toggleLang = (code: string) => {
     setSelectedLangs((prev) => {

@@ -245,7 +245,7 @@ export default function ContentBrowser() {
 
             try {
               const { data: retryResult, error: retryError } = await supabase.functions.invoke("publish-external", {
-                body: { items: retryItems, languages: [lang], translate_prompt: translatePrompt || undefined },
+                body: { items: retryItems, languages: [lang], translate, translate_prompt: translatePrompt || undefined },
               });
 
               if (!retryError && retryResult?.results) {

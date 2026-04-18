@@ -169,6 +169,19 @@ export function PublishDialog({ open, onOpenChange, selectedCount, publishing, o
             </div>
           </div>
           )}
+          {showTranslateToggle && (
+            <div className="flex items-start justify-between gap-3 p-3 rounded-md border">
+              <div className="space-y-0.5">
+                <Label className="text-sm font-medium">启用 AI 翻译</Label>
+                <p className="text-xs text-muted-foreground">
+                  {translateEnabled
+                    ? "将原始 JSON 翻译为目标语言后再发布"
+                    : "按当前 JSON 原文直接发布到所选语种（不翻译）"}
+                </p>
+              </div>
+              <Switch checked={translateEnabled} onCheckedChange={setTranslateEnabled} disabled={publishing} />
+            </div>
+          )}
           {allLanguages ? (
             <div>
               <Label className="text-sm font-medium mb-2 block">发布语言</Label>

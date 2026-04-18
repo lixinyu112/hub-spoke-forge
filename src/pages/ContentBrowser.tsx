@@ -201,6 +201,7 @@ export default function ContentBrowser() {
                   json_data: item.json_data,
                 })),
                 languages: [lang],
+                translate,
                 translate_prompt: translatePrompt || undefined,
               },
             });

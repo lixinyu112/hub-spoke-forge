@@ -1040,6 +1040,7 @@ export default function BlogProcessor() {
         progress={publishProgress}
         showEnvironment
         allLanguages
+        showTranslateToggle={false}
       />
 
       {/* Blog Sitemap dialog */}

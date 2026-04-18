@@ -301,7 +301,9 @@ serve(async (req) => {
   }
 
   try {
-    const { items, languages, translate_prompt } = await req.json();
+    const { items, languages, translate_prompt, translate } = await req.json();
+    // 默认开启翻译以保持向后兼容；显式传 false 时跳过翻译，按原始 JSON 发布
+    const shouldTranslate = translate !== false;
 
     if (!items?.length || !languages?.length) {
       return new Response(

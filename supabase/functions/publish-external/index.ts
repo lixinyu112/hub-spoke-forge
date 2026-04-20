@@ -222,9 +222,30 @@ function extractNaturalText(data: any): string {
   return out.join(" ").slice(0, 12000);
 }
 
+// 典型英语停用词（小写，词边界匹配）。用于判定 es/pt 等非英语目标是否其实仍是英文。
+const ENGLISH_STOPWORDS = [
+  "the", "and", "for", "with", "this", "that", "from", "your", "you", "are",
+  "have", "has", "will", "can", "how", "what", "when", "which", "their", "they",
+  "guide", "learn", "more", "about", "into", "using", "use",
+];
+
+function countEnglishStopwords(text: string): number {
+  const lower = " " + text.toLowerCase() + " ";
+  let count = 0;
+  for (const w of ENGLISH_STOPWORDS) {
+    const re = new RegExp(`[^a-z]${w}[^a-z]`, "g");
+    const m = lower.match(re);
+    if (m) count += m.length;
+  }
+  return count;
+}
+
 function validateLanguageFingerprint(data: any, targetLang: string): void {
   const sample = extractNaturalText(data);
-  if (!sample.trim()) return; // 没有自然语言文本可校验
+  if (!sample.trim()) {
+    console.log(`[validate] lang=${targetLang} skip: no natural text`);
+    return;
+  }
 
   const hasKorean = /[\uAC00-\uD7AF]/.test(sample);
   const hasJapaneseKana = /[\u3040-\u309F\u30A0-\u30FF]/.test(sample); // 平假名/片假名
@@ -240,10 +261,22 @@ function validateLanguageFingerprint(data: any, targetLang: string): void {
   const spanishMarkers = (sample.match(/[áéíóúüñ¡¿]/gi) || []).length;
   const portugueseMarkers = (sample.match(/[áéíóúâêôãõàç]/gi) || []).length;
 
+  // 英语停用词命中数（用于检测 es/pt/ko/ja/ru/zh 是否仍残留大量英文）
+  const englishHits = countEnglishStopwords(sample);
+
+  console.log(
+    `[validate] lang=${targetLang} sampleLen=${sample.length} latinRatio=${latinRatio.toFixed(2)} ` +
+    `spMarks=${spanishMarkers} ptMarks=${portugueseMarkers} engHits=${englishHits} ` +
+    `ko=${hasKorean} ja=${hasJapaneseKana} zh=${hasChinese} cyr=${hasCyrillic}`,
+  );
+
   switch (targetLang) {
     case "ko":
       if (!hasKorean) {
         throw new Error(`目标语言为韩语但输出未包含任何韩文字符${hasJapaneseKana ? "（疑似返回了日语）" : ""}`);
+      }
+      if (englishHits >= 8) {
+        throw new Error(`目标语言为韩语但输出残留大量英文单词（命中 ${englishHits} 个英语停用词）`);
       }
       break;
     case "ja":
@@ -253,6 +286,9 @@ function validateLanguageFingerprint(data: any, targetLang: string): void {
       if (hasKorean) {
         throw new Error(`目标语言为日语但输出包含韩文字符`);
       }
+      if (englishHits >= 8) {
+        throw new Error(`目标语言为日语但输出残留大量英文单词（命中 ${englishHits} 个英语停用词）`);
+      }
       break;
     case "zh":
       if (!hasChinese) {
@@ -261,33 +297,53 @@ function validateLanguageFingerprint(data: any, targetLang: string): void {
       if (hasKorean || hasJapaneseKana) {
         throw new Error(`目标语言为中文但输出混入了${hasKorean ? "韩语" : "日语"}字符`);
       }
+      if (englishHits >= 8) {
+        throw new Error(`目标语言为中文但输出残留大量英文单词（命中 ${englishHits} 个英语停用词）`);
+      }
       break;
     case "ru":
       if (!hasCyrillic) {
         throw new Error(`目标语言为俄语但输出未包含西里尔字符`);
       }
+      if (englishHits >= 8) {
+        throw new Error(`目标语言为俄语但输出残留大量英文单词（命中 ${englishHits} 个英语停用词）`);
+      }
       break;
     case "es":
-      // 西语必须以拉丁字母为主，且至少应包含若干西语特征字符（á/é/í/ó/ú/ñ/¡/¿）
       if (latinRatio < 0.5) {
         throw new Error(`目标语言为西班牙语但输出未以拉丁字母为主`);
       }
-      if (spanishMarkers < 3 && totalNonSpace > 200) {
-        throw new Error(`目标语言为西班牙语但输出几乎不含西语特征字符（á/é/í/ó/ú/ñ/¡/¿），疑似未翻译保留了英文`);
-      }
       if (hasChinese || hasKorean || hasJapaneseKana || hasCyrillic) {
         throw new Error(`目标语言为西班牙语但输出混入了非拉丁字符`);
+      }
+      // 关键拦截：英语停用词命中过多，或西语特征字符过少（同时文本足够长）
+      if (englishHits >= 5) {
+        throw new Error(
+          `目标语言为西班牙语但输出残留大量英文单词（命中 ${englishHits} 个英语停用词如 the/and/for/guide），疑似未翻译`,
+        );
+      }
+      if (sample.length >= 200 && spanishMarkers < 2) {
+        throw new Error(
+          `目标语言为西班牙语但输出几乎不含西语特征字符（á/é/í/ó/ú/ñ/¡/¿ 仅 ${spanishMarkers} 个），疑似未翻译保留了英文`,
+        );
       }
       break;
     case "pt":
       if (latinRatio < 0.5) {
         throw new Error(`目标语言为葡萄牙语但输出未以拉丁字母为主`);
       }
-      if (portugueseMarkers < 3 && totalNonSpace > 200) {
-        throw new Error(`目标语言为葡萄牙语但输出几乎不含葡语特征字符（á/é/í/ó/ú/ã/õ/ç），疑似未翻译保留了英文`);
-      }
       if (hasChinese || hasKorean || hasJapaneseKana || hasCyrillic) {
         throw new Error(`目标语言为葡萄牙语但输出混入了非拉丁字符`);
+      }
+      if (englishHits >= 5) {
+        throw new Error(
+          `目标语言为葡萄牙语但输出残留大量英文单词（命中 ${englishHits} 个英语停用词），疑似未翻译`,
+        );
+      }
+      if (sample.length >= 200 && portugueseMarkers < 2) {
+        throw new Error(
+          `目标语言为葡萄牙语但输出几乎不含葡语特征字符（á/é/í/ó/ú/ã/õ/ç 仅 ${portugueseMarkers} 个），疑似未翻译保留了英文`,
+        );
       }
       break;
     case "en":

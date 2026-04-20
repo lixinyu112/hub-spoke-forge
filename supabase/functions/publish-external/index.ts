@@ -118,7 +118,9 @@ async function callTranslateApi(
 ): Promise<any> {
   const langName = LANG_NAMES[targetLang] || targetLang;
 
-  // If user provided a custom translate prompt, use it as the PRIMARY system instruction
+  // 强制目标语言指令——置于最高优先级
+  const targetLangDirective = `【目标语言强制要求】\n本次翻译的目标语言是：${langName}（ISO 代码：${targetLang}）。\n输出文本必须 100% 为 ${langName}，禁止混入任何其他语言（包括但不限于日语、中文、英文等非目标语言）。\n如果你不确定某个词的 ${langName} 表达，请使用最贴近的 ${langName} 词汇，绝不能使用其他语言代替。`;
+
   const defaultSystemPrompt = "你是一个精确的 JSON 翻译引擎，只输出翻译后的 JSON。";
 
   const baseRules = `请将以下 JSON 中所有面向用户的文本内容翻译为 ${langName}（语言代码：${targetLang}）。
@@ -128,16 +130,17 @@ async function callTranslateApi(
 3. 不要翻译 URL、slug、技术标识符、CSS类名、图片路径
 4. 不要翻译 type、status 等枚举值
 5. 保持 JSON 结构完全不变
-6. 直接输出翻译后的 JSON，不要添加任何解释`;
+6. 直接输出翻译后的 JSON，不要添加任何解释
+7. 所有翻译后的文本必须是 ${langName}，绝不能输出其他语言`;
 
-  // When custom prompt exists, prepend it as the authoritative instruction
+  // System prompt 始终以目标语言强制指令开头，保证最高优先级
   let systemPrompt: string;
   let userPrompt: string;
   if (customSystemPrompt?.trim()) {
-    systemPrompt = customSystemPrompt.trim();
-    userPrompt = `${baseRules}\n\n请严格遵循以上系统指令中的翻译要求进行翻译。\n\nJSON 内容：\n${jsonStr}`;
+    systemPrompt = `${targetLangDirective}\n\n${customSystemPrompt.trim()}`;
+    userPrompt = `${baseRules}\n\n请严格遵循以上系统指令中的翻译要求，并务必将输出语言锁定为 ${langName}。\n\nJSON 内容：\n${jsonStr}`;
   } else {
-    systemPrompt = defaultSystemPrompt;
+    systemPrompt = `${targetLangDirective}\n\n${defaultSystemPrompt}`;
     userPrompt = `${baseRules}\n\nJSON 内容：\n${jsonStr}`;
   }
 
@@ -153,7 +156,7 @@ async function callTranslateApi(
         { role: "system", content: systemPrompt },
         { role: "user", content: userPrompt },
       ],
-      temperature: 0.1,
+      temperature: 0,
     }),
   });
 
@@ -165,7 +168,56 @@ async function callTranslateApi(
   const result = await resp.json();
   let content = result.choices?.[0]?.message?.content || "";
   content = content.replace(/^```(?:json)?\s*\n?/i, "").replace(/\n?```\s*$/i, "").trim();
-  return JSON.parse(content);
+  const parsed = JSON.parse(content);
+
+  // 语言指纹校验：确保输出语言匹配目标
+  validateLanguageFingerprint(parsed, targetLang);
+
+  return parsed;
+}
+
+/**
+ * 校验翻译结果是否包含目标语言的特征字符。
+ * 若发现明显的"语言不匹配"（如要求韩语却返回日语），抛出错误。
+ */
+function validateLanguageFingerprint(data: any, targetLang: string): void {
+  const text = JSON.stringify(data);
+  // 提取所有字符（去除 JSON 结构符号、URL、技术字段）
+  const sample = text.slice(0, 8000);
+
+  const hasKorean = /[\uAC00-\uD7AF]/.test(sample);
+  const hasJapaneseKana = /[\u3040-\u309F\u30A0-\u30FF]/.test(sample); // 平假名/片假名
+  const hasChinese = /[\u4E00-\u9FFF]/.test(sample);
+  const hasCyrillic = /[\u0400-\u04FF]/.test(sample);
+
+  switch (targetLang) {
+    case "ko":
+      if (!hasKorean) {
+        throw new Error(`目标语言为韩语但输出未包含任何韩文字符${hasJapaneseKana ? "（疑似返回了日语）" : ""}`);
+      }
+      break;
+    case "ja":
+      if (!hasJapaneseKana && !hasChinese) {
+        throw new Error(`目标语言为日语但输出未包含日语假名`);
+      }
+      if (hasKorean) {
+        throw new Error(`目标语言为日语但输出包含韩文字符`);
+      }
+      break;
+    case "zh":
+      if (!hasChinese) {
+        throw new Error(`目标语言为中文但输出未包含中文字符`);
+      }
+      if (hasKorean || hasJapaneseKana) {
+        throw new Error(`目标语言为中文但输出混入了${hasKorean ? "韩语" : "日语"}字符`);
+      }
+      break;
+    case "ru":
+      if (!hasCyrillic) {
+        throw new Error(`目标语言为俄语但输出未包含西里尔字符`);
+      }
+      break;
+  }
 }
 
 /** Rough size estimation for chunking */

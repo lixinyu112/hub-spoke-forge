@@ -312,9 +312,25 @@ serve(async (req) => {
           // 根据开关决定是否翻译；关闭翻译时直接使用原始 JSON 数据
           let translatedData: any;
           if (shouldTranslate) {
+            console.log(`[translate] start item=${item.id} lang=${lang} hasPrompt=${!!translate_prompt}`);
             try {
               translatedData = await translateJson(item.json_data, lang, translate_prompt);
+              // 健全性校验：翻译结果不能与原文完全一致（除非是英文→英文，但本流程不允许）
+              const originalStr = JSON.stringify(item.json_data);
+              const translatedStr = JSON.stringify(translatedData);
+              if (originalStr === translatedStr) {
+                console.warn(`[translate] result identical to source for ${item.id}/${lang} — treating as failure`);
+                results.push({
+                  item_id: item.id,
+                  language: lang,
+                  success: false,
+                  error: `翻译失败（${lang}）: 大模型返回内容与原文完全一致，未实际翻译`,
+                });
+                continue;
+              }
+              console.log(`[translate] success item=${item.id} lang=${lang}`);
             } catch (translateErr) {
+              console.error(`[translate] failed item=${item.id} lang=${lang}:`, translateErr);
               results.push({
                 item_id: item.id,
                 language: lang,

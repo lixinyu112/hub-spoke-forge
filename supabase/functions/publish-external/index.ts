@@ -180,15 +180,65 @@ async function callTranslateApi(
  * 校验翻译结果是否包含目标语言的特征字符。
  * 若发现明显的"语言不匹配"（如要求韩语却返回日语），抛出错误。
  */
+/**
+ * 提取 JSON 中所有面向用户的自然语言文本（值），跳过键名/URL/技术字段。
+ * 用于语言指纹检测，避免被 URL、slug、tag 干扰。
+ */
+function extractNaturalText(data: any): string {
+  const SKIP_KEYS = new Set([
+    "id", "type", "slug", "hubSlug", "url", "href", "src", "image", "images",
+    "coverImage", "avatar", "icon", "className", "color", "bg", "background",
+    "publishDate", "date", "readTime", "tags", "tag", "category", "lang",
+    "language", "code", "key", "name", // name 在 schema 里多为技术 key
+  ]);
+  const TEXT_KEYS = new Set([
+    "title", "subtitle", "description", "content", "text", "label", "heading",
+    "body", "summary", "quote", "answer", "question", "caption", "paragraph",
+    "intro", "outro", "cta", "ctaText", "buttonText", "placeholder", "alt",
+  ]);
+  const out: string[] = [];
+  const walk = (node: any, key?: string): void => {
+    if (node == null) return;
+    if (typeof node === "string") {
+      if (key && SKIP_KEYS.has(key)) return;
+      // 跳过 URL / 纯 slug
+      if (/^https?:\/\//i.test(node)) return;
+      if (/^[a-z0-9][a-z0-9\-_/.]*$/i.test(node) && node.length < 60 && !/\s/.test(node)) return;
+      // 优先收集明确的文本字段或包含空格的较长字符串
+      if ((key && TEXT_KEYS.has(key)) || (node.length > 10 && /\s/.test(node))) {
+        out.push(node);
+      }
+      return;
+    }
+    if (Array.isArray(node)) {
+      node.forEach((v) => walk(v, key));
+      return;
+    }
+    if (typeof node === "object") {
+      for (const [k, v] of Object.entries(node)) walk(v, k);
+    }
+  };
+  walk(data);
+  return out.join(" ").slice(0, 12000);
+}
+
 function validateLanguageFingerprint(data: any, targetLang: string): void {
-  const text = JSON.stringify(data);
-  // 提取所有字符（去除 JSON 结构符号、URL、技术字段）
-  const sample = text.slice(0, 8000);
+  const sample = extractNaturalText(data);
+  if (!sample.trim()) return; // 没有自然语言文本可校验
 
   const hasKorean = /[\uAC00-\uD7AF]/.test(sample);
   const hasJapaneseKana = /[\u3040-\u309F\u30A0-\u30FF]/.test(sample); // 平假名/片假名
   const hasChinese = /[\u4E00-\u9FFF]/.test(sample);
   const hasCyrillic = /[\u0400-\u04FF]/.test(sample);
+
+  // 拉丁字母比例（用于检测 es/pt/en 是否被翻译，以及是否还残留大量英文）
+  const latinChars = (sample.match(/[A-Za-z]/g) || []).length;
+  const totalNonSpace = sample.replace(/\s/g, "").length;
+  const latinRatio = totalNonSpace > 0 ? latinChars / totalNonSpace : 0;
+
+  // 西语/葡语特征字符（带变音符号 + ñ/ç + 倒置标点）
+  const spanishMarkers = (sample.match(/[áéíóúüñ¡¿]/gi) || []).length;
+  const portugueseMarkers = (sample.match(/[áéíóúâêôãõàç]/gi) || []).length;
 
   switch (targetLang) {
     case "ko":
@@ -215,6 +265,37 @@ function validateLanguageFingerprint(data: any, targetLang: string): void {
     case "ru":
       if (!hasCyrillic) {
         throw new Error(`目标语言为俄语但输出未包含西里尔字符`);
+      }
+      break;
+    case "es":
+      // 西语必须以拉丁字母为主，且至少应包含若干西语特征字符（á/é/í/ó/ú/ñ/¡/¿）
+      if (latinRatio < 0.5) {
+        throw new Error(`目标语言为西班牙语但输出未以拉丁字母为主`);
+      }
+      if (spanishMarkers < 3 && totalNonSpace > 200) {
+        throw new Error(`目标语言为西班牙语但输出几乎不含西语特征字符（á/é/í/ó/ú/ñ/¡/¿），疑似未翻译保留了英文`);
+      }
+      if (hasChinese || hasKorean || hasJapaneseKana || hasCyrillic) {
+        throw new Error(`目标语言为西班牙语但输出混入了非拉丁字符`);
+      }
+      break;
+    case "pt":
+      if (latinRatio < 0.5) {
+        throw new Error(`目标语言为葡萄牙语但输出未以拉丁字母为主`);
+      }
+      if (portugueseMarkers < 3 && totalNonSpace > 200) {
+        throw new Error(`目标语言为葡萄牙语但输出几乎不含葡语特征字符（á/é/í/ó/ú/ã/õ/ç），疑似未翻译保留了英文`);
+      }
+      if (hasChinese || hasKorean || hasJapaneseKana || hasCyrillic) {
+        throw new Error(`目标语言为葡萄牙语但输出混入了非拉丁字符`);
+      }
+      break;
+    case "en":
+      if (latinRatio < 0.5) {
+        throw new Error(`目标语言为英语但输出未以拉丁字母为主`);
+      }
+      if (hasChinese || hasKorean || hasJapaneseKana || hasCyrillic) {
+        throw new Error(`目标语言为英语但输出混入了非拉丁字符`);
       }
       break;
   }

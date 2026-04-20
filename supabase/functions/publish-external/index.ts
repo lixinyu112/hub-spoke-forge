@@ -178,12 +178,12 @@ const MAX_CHUNK_TOKENS = 6000;
 /**
  * Translate JSON, chunking by top-level components array if content is too large.
  * Strictly follows the custom translate prompt when provided.
+ * THROWS on any translation failure — caller must handle.
  */
 async function translateJson(jsonData: any, targetLang: string, customSystemPrompt?: string): Promise<any> {
   const llmApiKey = Deno.env.get("CUSTOM_LLM_API_KEY");
   if (!llmApiKey) {
-    console.warn("CUSTOM_LLM_API_KEY not set, skipping translation");
-    return jsonData;
+    throw new Error("翻译失败：未配置 CUSTOM_LLM_API_KEY");
   }
 
   const fullStr = JSON.stringify(jsonData, null, 2);
@@ -191,25 +191,14 @@ async function translateJson(jsonData: any, targetLang: string, customSystemProm
 
   // Small enough → translate in one shot
   if (tokens <= MAX_CHUNK_TOKENS) {
-    try {
-      return await callTranslateApi(fullStr, targetLang, llmApiKey, customSystemPrompt);
-    } catch (err) {
-      console.error("Translation failed (single):", err);
-      return jsonData;
-    }
+    return await callTranslateApi(fullStr, targetLang, llmApiKey, customSystemPrompt);
   }
 
   // Large content → chunk by top-level keys
   console.log(`Content too large (${tokens} est. tokens), chunking for translation...`);
 
   if (typeof jsonData !== "object" || jsonData === null || Array.isArray(jsonData)) {
-    // Can't chunk non-objects, try direct anyway
-    try {
-      return await callTranslateApi(fullStr, targetLang, llmApiKey, customSystemPrompt);
-    } catch (err) {
-      console.error("Translation failed (large non-object):", err);
-      return jsonData;
-    }
+    return await callTranslateApi(fullStr, targetLang, llmApiKey, customSystemPrompt);
   }
 
   // Strategy: translate components array items individually, other fields as a group
@@ -228,13 +217,8 @@ async function translateJson(jsonData: any, targetLang: string, customSystemProm
   if (Object.keys(metaFields).length > 0) {
     const metaStr = JSON.stringify(metaFields, null, 2);
     if (estimateTokens(metaStr) > 50) {
-      try {
-        const translated = await callTranslateApi(metaStr, targetLang, llmApiKey, customSystemPrompt);
-        Object.assign(result, translated);
-      } catch (err) {
-        console.error("Translation failed for meta fields:", err);
-        Object.assign(result, metaFields);
-      }
+      const translated = await callTranslateApi(metaStr, targetLang, llmApiKey, customSystemPrompt);
+      Object.assign(result, translated);
     } else {
       Object.assign(result, metaFields);
     }
@@ -252,19 +236,13 @@ async function translateJson(jsonData: any, targetLang: string, customSystemProm
       const compTokens = estimateTokens(compStr);
 
       if (chunk.length > 0 && chunkSize + compTokens > MAX_CHUNK_TOKENS) {
-        // Translate current chunk
-        try {
-          const chunkArr = await callTranslateApi(
-            JSON.stringify(chunk, null, 2),
-            targetLang,
-            llmApiKey,
-            customSystemPrompt,
-          );
-          translatedComponents.push(...(Array.isArray(chunkArr) ? chunkArr : [chunkArr]));
-        } catch (err) {
-          console.error(`Translation failed for component chunk (${chunk.length} items):`, err);
-          translatedComponents.push(...chunk);
-        }
+        const chunkArr = await callTranslateApi(
+          JSON.stringify(chunk, null, 2),
+          targetLang,
+          llmApiKey,
+          customSystemPrompt,
+        );
+        translatedComponents.push(...(Array.isArray(chunkArr) ? chunkArr : [chunkArr]));
         chunk = [];
         chunkSize = 0;
       }
@@ -273,20 +251,14 @@ async function translateJson(jsonData: any, targetLang: string, customSystemProm
       chunkSize += compTokens;
     }
 
-    // Translate remaining chunk
     if (chunk.length > 0) {
-      try {
-        const chunkArr = await callTranslateApi(
-          JSON.stringify(chunk, null, 2),
-          targetLang,
-          llmApiKey,
-          customSystemPrompt,
-        );
-        translatedComponents.push(...(Array.isArray(chunkArr) ? chunkArr : [chunkArr]));
-      } catch (err) {
-        console.error(`Translation failed for final chunk (${chunk.length} items):`, err);
-        translatedComponents.push(...chunk);
-      }
+      const chunkArr = await callTranslateApi(
+        JSON.stringify(chunk, null, 2),
+        targetLang,
+        llmApiKey,
+        customSystemPrompt,
+      );
+      translatedComponents.push(...(Array.isArray(chunkArr) ? chunkArr : [chunkArr]));
     }
 
     result[componentsKey] = translatedComponents;
@@ -338,9 +310,22 @@ serve(async (req) => {
 
         try {
           // 根据开关决定是否翻译；关闭翻译时直接使用原始 JSON 数据
-          const translatedData = shouldTranslate
-            ? await translateJson(item.json_data, lang, translate_prompt)
-            : item.json_data;
+          let translatedData: any;
+          if (shouldTranslate) {
+            try {
+              translatedData = await translateJson(item.json_data, lang, translate_prompt);
+            } catch (translateErr) {
+              results.push({
+                item_id: item.id,
+                language: lang,
+                success: false,
+                error: `翻译失败（${lang}）: ${translateErr instanceof Error ? translateErr.message : String(translateErr)}`,
+              });
+              continue;
+            }
+          } else {
+            translatedData = item.json_data;
+          }
 
           const resp = await fetch(url, {
             method: "POST",

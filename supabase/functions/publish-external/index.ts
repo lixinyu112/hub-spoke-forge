@@ -456,7 +456,10 @@ async function translateJson(jsonData: any, targetLang: string, customSystemProm
   return result;
 }
 
+const PUBLISH_FN_VERSION = "v3-strict-fingerprint-2026-04-20";
+
 serve(async (req) => {
+  console.log(`[publish-external] ${PUBLISH_FN_VERSION} ${req.method}`);
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }

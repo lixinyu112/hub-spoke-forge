@@ -13,6 +13,34 @@ const LANG_NAMES: Record<string, string> = {
   es: "Español", pt: "Português", ru: "Русский",
 };
 
+function extractJsonFromResponse(response: string): unknown {
+  let cleaned = response
+    .replace(/```json\s*/gi, "")
+    .replace(/```\s*/g, "")
+    .trim();
+
+  const jsonStart = cleaned.search(/[\{\[]/);
+  if (jsonStart === -1) throw new Error("No JSON object found in translation response");
+
+  const closeChar = cleaned[jsonStart] === "[" ? "]" : "}";
+  const jsonEnd = cleaned.lastIndexOf(closeChar);
+  if (jsonEnd === -1) throw new Error("No closing JSON bracket found in translation response");
+
+  cleaned = cleaned.substring(jsonStart, jsonEnd + 1);
+
+  try {
+    return JSON.parse(cleaned);
+  } catch (_) {
+    const repaired = cleaned
+      .replace(/\\(?!["\\/bfnrtu])/g, "")
+      .replace(/,\s*}/g, "}")
+      .replace(/,\s*]/g, "]")
+      .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, "");
+
+    return JSON.parse(repaired);
+  }
+}
+
 // Pure JS MD5 implementation (no dependencies, Deno-compatible)
 function md5(input: string): string {
   const bytes = new TextEncoder().encode(input);
@@ -166,9 +194,8 @@ async function callTranslateApi(
   }
 
   const result = await resp.json();
-  let content = result.choices?.[0]?.message?.content || "";
-  content = content.replace(/^```(?:json)?\s*\n?/i, "").replace(/\n?```\s*$/i, "").trim();
-  const parsed = JSON.parse(content);
+  const content = result.choices?.[0]?.message?.content || "";
+  const parsed = extractJsonFromResponse(content);
 
   // 语言指纹校验：确保输出语言匹配目标
   validateLanguageFingerprint(parsed, targetLang);
@@ -456,7 +483,7 @@ async function translateJson(jsonData: any, targetLang: string, customSystemProm
   return result;
 }
 
-const PUBLISH_FN_VERSION = "v3-strict-fingerprint-2026-04-20";
+const PUBLISH_FN_VERSION = "v4-robust-json-extract-2026-04-21";
 
 serve(async (req) => {
   console.log(`[publish-external] ${PUBLISH_FN_VERSION} ${req.method}`);

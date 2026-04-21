@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { Plus, Send, Filter, Pencil, FileCode } from "lucide-react";
+import { Plus, Send, Filter, Pencil, FileCode, History } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -18,6 +18,7 @@ import { PromptConfigButton } from "@/components/PromptConfigButton";
 import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from "@/components/ui/resizable";
 import { loadPromptConfig, savePromptConfig } from "@/lib/promptConfig";
 import { SitemapDialog } from "@/components/SitemapDialog";
+import { PublishLogsDialog } from "@/components/PublishLogsDialog";
 
 const THEME_NAME_REGEX = /^[a-z0-9][a-z0-9\-]*$/;
 
@@ -48,6 +49,7 @@ export default function ContentBrowser() {
   const [editThemeFeishuToken, setEditThemeFeishuToken] = useState("");
   const [editThemeNameError, setEditThemeNameError] = useState("");
   const [sitemapDialogOpen, setSitemapDialogOpen] = useState(false);
+  const [logsDialogOpen, setLogsDialogOpen] = useState(false);
 
   // Load saved prompt
   useEffect(() => {

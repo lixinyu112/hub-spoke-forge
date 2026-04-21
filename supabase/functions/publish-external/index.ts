@@ -165,6 +165,7 @@ async function callTranslateApi(
   targetLang: string,
   llmApiKey: string,
   customSystemPrompt?: string,
+  attempt: number = 1,
 ): Promise<any> {
   const langName = LANG_NAMES[targetLang] || targetLang;
 

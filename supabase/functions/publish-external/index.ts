@@ -533,7 +533,7 @@ serve(async (req) => {
       );
     }
 
-    const results: { item_id: string; language: string; success: boolean; error?: string }[] = [];
+    const results: { item_id: string; language: string; success: boolean; error?: string; retryable?: boolean }[] = [];
 
     for (const item of items) {
       for (const lang of languages) {

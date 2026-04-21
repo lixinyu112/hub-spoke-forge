@@ -231,6 +231,40 @@ async function callTranslateApi(
   return parsed;
 }
 
+const TRANSLATE_MAX_ATTEMPTS = 3;
+
+/**
+ * 包装 callTranslateApi，对"语言指纹校验失败 / JSON 解析失败"等可恢复错误最多重试 3 次。
+ * 鉴权 / 额度类错误（401、quota）不会重试，立即抛出。
+ */
+async function callTranslateApiWithRetry(
+  jsonStr: string,
+  targetLang: string,
+  llmApiKey: string,
+  customSystemPrompt?: string,
+): Promise<any> {
+  let lastErr: unknown;
+  for (let attempt = 1; attempt <= TRANSLATE_MAX_ATTEMPTS; attempt++) {
+    try {
+      const data = await callTranslateApi(jsonStr, targetLang, llmApiKey, customSystemPrompt, attempt);
+      if (attempt > 1) {
+        console.log(`[translate-retry] success lang=${targetLang} attempt=${attempt}`);
+      }
+      return data;
+    } catch (err) {
+      lastErr = err;
+      if (isTranslationAuthOrQuotaError(err)) throw err;
+      const msg = err instanceof Error ? err.message : String(err);
+      console.warn(`[translate-retry] attempt=${attempt}/${TRANSLATE_MAX_ATTEMPTS} lang=${targetLang} failed: ${msg}`);
+      if (attempt < TRANSLATE_MAX_ATTEMPTS) {
+        await new Promise((r) => setTimeout(r, 400 * attempt));
+      }
+    }
+  }
+  const finalMsg = lastErr instanceof Error ? lastErr.message : String(lastErr);
+  throw new Error(`已重试 ${TRANSLATE_MAX_ATTEMPTS} 次仍失败：${finalMsg}`);
+}
+
 /**
  * 校验翻译结果是否包含目标语言的特征字符。
  * 若发现明显的"语言不匹配"（如要求韩语却返回日语），抛出错误。

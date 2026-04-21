@@ -32,6 +32,7 @@ function extractJsonFromResponse(response: string): unknown {
     return JSON.parse(cleaned);
   } catch (_) {
     const repaired = cleaned
+      .replace(/\\(?!["\\/bfnrtu])/g, "")
       .replace(/,\s*}/g, "}")
       .replace(/,\s*]/g, "]")
       .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, "");
@@ -482,7 +483,7 @@ async function translateJson(jsonData: any, targetLang: string, customSystemProm
   return result;
 }
 
-const PUBLISH_FN_VERSION = "v3-strict-fingerprint-2026-04-20";
+const PUBLISH_FN_VERSION = "v4-robust-json-extract-2026-04-21";
 
 serve(async (req) => {
   console.log(`[publish-external] ${PUBLISH_FN_VERSION} ${req.method}`);

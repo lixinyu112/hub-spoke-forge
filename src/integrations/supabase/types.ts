@@ -361,6 +361,69 @@ export type Database = {
           },
         ]
       }
+      publish_logs: {
+        Row: {
+          created_at: string
+          details: Json
+          duration_ms: number | null
+          failed: number
+          id: string
+          item_count: number
+          languages: Json
+          project_id: string
+          success: number
+          theme_id: string | null
+          theme_name: string | null
+          total: number
+          translate_enabled: boolean
+        }
+        Insert: {
+          created_at?: string
+          details?: Json
+          duration_ms?: number | null
+          failed?: number
+          id?: string
+          item_count?: number
+          languages?: Json
+          project_id: string
+          success?: number
+          theme_id?: string | null
+          theme_name?: string | null
+          total?: number
+          translate_enabled?: boolean
+        }
+        Update: {
+          created_at?: string
+          details?: Json
+          duration_ms?: number | null
+          failed?: number
+          id?: string
+          item_count?: number
+          languages?: Json
+          project_id?: string
+          success?: number
+          theme_id?: string | null
+          theme_name?: string | null
+          total?: number
+          translate_enabled?: boolean
+        }
+        Relationships: [
+          {
+            foreignKeyName: "publish_logs_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "publish_logs_theme_id_fkey"
+            columns: ["theme_id"]
+            isOneToOne: false
+            referencedRelation: "themes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       sitemap_configs: {
         Row: {
           base_url: string

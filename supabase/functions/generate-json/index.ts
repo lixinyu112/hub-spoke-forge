@@ -289,9 +289,9 @@ Deno.serve(async (req) => {
       });
     }
 
-    const API_KEY = Deno.env.get('CUSTOM_LLM_API_KEY');
+    const API_KEY = Deno.env.get('LOVABLE_API_KEY');
     if (!API_KEY) {
-      return new Response(JSON.stringify({ error: 'CUSTOM_LLM_API_KEY not configured' }), {
+      return new Response(JSON.stringify({ error: 'LOVABLE_API_KEY not configured' }), {
         status: 500,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
@@ -318,14 +318,14 @@ Deno.serve(async (req) => {
     let response: Response | null = null;
 
     for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
-      response = await fetch('https://api.babelark.com/v1/chat/completions', {
+      response = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
         method: 'POST',
         headers: {
           Authorization: `Bearer ${API_KEY}`,
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          model: 'gemini-3.1-flash-lite-preview',
+          model: 'google/gemini-3-flash-preview',
           messages: [
             { role: 'system', content: systemPrompt },
             { role: 'user', content: userMessage },
@@ -357,8 +357,11 @@ Deno.serve(async (req) => {
       }
       const errText = await response!.text();
       console.error('AI gateway error:', response!.status, errText);
-      return new Response(JSON.stringify({ error: `AI 调用失败: ${response!.status}` }), {
-        status: 500,
+      const isAuthOrQuota = response!.status === 401 || /额度已用尽|quota|Unauthorized/i.test(errText);
+      return new Response(JSON.stringify({
+        error: isAuthOrQuota ? 'AI 服务认证或额度异常，请检查 Lovable AI 用量' : `AI 调用失败: ${response!.status}`,
+      }), {
+        status: isAuthOrQuota ? 200 : 500,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }

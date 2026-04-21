@@ -545,7 +545,7 @@ async function translateJson(jsonData: any, targetLang: string, customSystemProm
   return result;
 }
 
-const PUBLISH_FN_VERSION = "v5-graceful-quota-errors-2026-04-21";
+const PUBLISH_FN_VERSION = "v6-translate-retry-3x-2026-04-21";
 
 serve(async (req) => {
   console.log(`[publish-external] ${PUBLISH_FN_VERSION} ${req.method}`);

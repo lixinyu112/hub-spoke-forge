@@ -469,14 +469,14 @@ async function translateJson(jsonData: any, targetLang: string, customSystemProm
 
   // Small enough → translate in one shot
   if (tokens <= MAX_CHUNK_TOKENS) {
-    return await callTranslateApi(fullStr, targetLang, llmApiKey, customSystemPrompt);
+    return await callTranslateApiWithRetry(fullStr, targetLang, llmApiKey, customSystemPrompt);
   }
 
   // Large content → chunk by top-level keys
   console.log(`Content too large (${tokens} est. tokens), chunking for translation...`);
 
   if (typeof jsonData !== "object" || jsonData === null || Array.isArray(jsonData)) {
-    return await callTranslateApi(fullStr, targetLang, llmApiKey, customSystemPrompt);
+    return await callTranslateApiWithRetry(fullStr, targetLang, llmApiKey, customSystemPrompt);
   }
 
   // Strategy: translate components array items individually, other fields as a group
@@ -495,7 +495,7 @@ async function translateJson(jsonData: any, targetLang: string, customSystemProm
   if (Object.keys(metaFields).length > 0) {
     const metaStr = JSON.stringify(metaFields, null, 2);
     if (estimateTokens(metaStr) > 50) {
-      const translated = await callTranslateApi(metaStr, targetLang, llmApiKey, customSystemPrompt);
+      const translated = await callTranslateApiWithRetry(metaStr, targetLang, llmApiKey, customSystemPrompt);
       Object.assign(result, translated);
     } else {
       Object.assign(result, metaFields);
@@ -514,7 +514,7 @@ async function translateJson(jsonData: any, targetLang: string, customSystemProm
       const compTokens = estimateTokens(compStr);
 
       if (chunk.length > 0 && chunkSize + compTokens > MAX_CHUNK_TOKENS) {
-        const chunkArr = await callTranslateApi(
+        const chunkArr = await callTranslateApiWithRetry(
           JSON.stringify(chunk, null, 2),
           targetLang,
           llmApiKey,
@@ -530,7 +530,7 @@ async function translateJson(jsonData: any, targetLang: string, customSystemProm
     }
 
     if (chunk.length > 0) {
-      const chunkArr = await callTranslateApi(
+      const chunkArr = await callTranslateApiWithRetry(
         JSON.stringify(chunk, null, 2),
         targetLang,
         llmApiKey,

@@ -159,6 +159,7 @@ export default function ContentBrowser() {
     setPublishing(true);
     setPublishReport(null);
     setPublishProgress({ total: 0, done: 0 });
+    const startedAt = Date.now();
 
     try {
       const items = getSelectedData();
@@ -274,6 +275,26 @@ export default function ContentBrowser() {
       };
       setPublishReport(report);
 
+      // 写入发布日志（失败不影响主流程）
+      try {
+        const currentTheme = allThemes.find((t) => t.id === selectedThemeId);
+        await supabase.from("publish_logs").insert({
+          project_id: currentProject.id,
+          theme_id: selectedThemeId || null,
+          theme_name: currentTheme?.name || null,
+          item_count: items.length,
+          languages,
+          translate_enabled: translate,
+          total: report.total,
+          success: report.success,
+          failed: report.failed,
+          details: report.details,
+          duration_ms: Date.now() - startedAt,
+        });
+      } catch (logErr) {
+        console.error("写入发布日志失败", logErr);
+      }
+
       if (failCount === 0) {
         toast({ title: `全部发布成功：${successCount} 项（${items.length} 页面 × ${languages.length} 语言）` });
         setSelectedItems(new Set());
@@ -380,6 +401,10 @@ export default function ContentBrowser() {
               发布 ({selectedItems.size})
             </Button>
           )}
+          <Button size="sm" variant="outline" onClick={() => setLogsDialogOpen(true)} className="gap-1.5">
+            <History className="h-3.5 w-3.5" />
+            发布日志
+          </Button>
           <Button size="sm" variant="outline" onClick={() => setThemeDialogOpen(true)} className="gap-1.5">
             <Plus className="h-3.5 w-3.5" />
             新建主题
@@ -559,6 +584,12 @@ export default function ContentBrowser() {
           />
         ) : null;
       })()}
+
+      <PublishLogsDialog
+        open={logsDialogOpen}
+        onOpenChange={setLogsDialogOpen}
+        projectId={currentProject?.id || null}
+      />
     </div>
   );
 }

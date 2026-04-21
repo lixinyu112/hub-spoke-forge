@@ -165,6 +165,7 @@ async function callTranslateApi(
   targetLang: string,
   llmApiKey: string,
   customSystemPrompt?: string,
+  attempt: number = 1,
 ): Promise<any> {
   const langName = LANG_NAMES[targetLang] || targetLang;
 
@@ -186,11 +187,15 @@ async function callTranslateApi(
   // System prompt 始终以目标语言强制指令开头，保证最高优先级
   let systemPrompt: string;
   let userPrompt: string;
+  // 重试时追加更强的提示
+  const retryHint = attempt > 1
+    ? `\n\n【重试提醒】这是第 ${attempt} 次尝试。上次输出未通过 ${langName} 语言纯度校验（混入了英文或其他非目标语言），请彻底重新翻译，确保 100% 输出 ${langName}。`
+    : "";
   if (customSystemPrompt?.trim()) {
-    systemPrompt = `${targetLangDirective}\n\n${customSystemPrompt.trim()}`;
+    systemPrompt = `${targetLangDirective}${retryHint}\n\n${customSystemPrompt.trim()}`;
     userPrompt = `${baseRules}\n\n请严格遵循以上系统指令中的翻译要求，并务必将输出语言锁定为 ${langName}。\n\nJSON 内容：\n${jsonStr}`;
   } else {
-    systemPrompt = `${targetLangDirective}\n\n${defaultSystemPrompt}`;
+    systemPrompt = `${targetLangDirective}${retryHint}\n\n${defaultSystemPrompt}`;
     userPrompt = `${baseRules}\n\nJSON 内容：\n${jsonStr}`;
   }
 
@@ -206,7 +211,8 @@ async function callTranslateApi(
         { role: "system", content: systemPrompt },
         { role: "user", content: userPrompt },
       ],
-      temperature: 0,
+      // 重试时略提高温度以打破固定输出
+      temperature: attempt === 1 ? 0 : 0.3,
     }),
   });
 
@@ -223,6 +229,40 @@ async function callTranslateApi(
   validateLanguageFingerprint(parsed, targetLang);
 
   return parsed;
+}
+
+const TRANSLATE_MAX_ATTEMPTS = 3;
+
+/**
+ * 包装 callTranslateApi，对"语言指纹校验失败 / JSON 解析失败"等可恢复错误最多重试 3 次。
+ * 鉴权 / 额度类错误（401、quota）不会重试，立即抛出。
+ */
+async function callTranslateApiWithRetry(
+  jsonStr: string,
+  targetLang: string,
+  llmApiKey: string,
+  customSystemPrompt?: string,
+): Promise<any> {
+  let lastErr: unknown;
+  for (let attempt = 1; attempt <= TRANSLATE_MAX_ATTEMPTS; attempt++) {
+    try {
+      const data = await callTranslateApi(jsonStr, targetLang, llmApiKey, customSystemPrompt, attempt);
+      if (attempt > 1) {
+        console.log(`[translate-retry] success lang=${targetLang} attempt=${attempt}`);
+      }
+      return data;
+    } catch (err) {
+      lastErr = err;
+      if (isTranslationAuthOrQuotaError(err)) throw err;
+      const msg = err instanceof Error ? err.message : String(err);
+      console.warn(`[translate-retry] attempt=${attempt}/${TRANSLATE_MAX_ATTEMPTS} lang=${targetLang} failed: ${msg}`);
+      if (attempt < TRANSLATE_MAX_ATTEMPTS) {
+        await new Promise((r) => setTimeout(r, 400 * attempt));
+      }
+    }
+  }
+  const finalMsg = lastErr instanceof Error ? lastErr.message : String(lastErr);
+  throw new Error(`已重试 ${TRANSLATE_MAX_ATTEMPTS} 次仍失败：${finalMsg}`);
 }
 
 /**
@@ -429,14 +469,14 @@ async function translateJson(jsonData: any, targetLang: string, customSystemProm
 
   // Small enough → translate in one shot
   if (tokens <= MAX_CHUNK_TOKENS) {
-    return await callTranslateApi(fullStr, targetLang, llmApiKey, customSystemPrompt);
+    return await callTranslateApiWithRetry(fullStr, targetLang, llmApiKey, customSystemPrompt);
   }
 
   // Large content → chunk by top-level keys
   console.log(`Content too large (${tokens} est. tokens), chunking for translation...`);
 
   if (typeof jsonData !== "object" || jsonData === null || Array.isArray(jsonData)) {
-    return await callTranslateApi(fullStr, targetLang, llmApiKey, customSystemPrompt);
+    return await callTranslateApiWithRetry(fullStr, targetLang, llmApiKey, customSystemPrompt);
   }
 
   // Strategy: translate components array items individually, other fields as a group
@@ -455,7 +495,7 @@ async function translateJson(jsonData: any, targetLang: string, customSystemProm
   if (Object.keys(metaFields).length > 0) {
     const metaStr = JSON.stringify(metaFields, null, 2);
     if (estimateTokens(metaStr) > 50) {
-      const translated = await callTranslateApi(metaStr, targetLang, llmApiKey, customSystemPrompt);
+      const translated = await callTranslateApiWithRetry(metaStr, targetLang, llmApiKey, customSystemPrompt);
       Object.assign(result, translated);
     } else {
       Object.assign(result, metaFields);
@@ -474,7 +514,7 @@ async function translateJson(jsonData: any, targetLang: string, customSystemProm
       const compTokens = estimateTokens(compStr);
 
       if (chunk.length > 0 && chunkSize + compTokens > MAX_CHUNK_TOKENS) {
-        const chunkArr = await callTranslateApi(
+        const chunkArr = await callTranslateApiWithRetry(
           JSON.stringify(chunk, null, 2),
           targetLang,
           llmApiKey,
@@ -490,7 +530,7 @@ async function translateJson(jsonData: any, targetLang: string, customSystemProm
     }
 
     if (chunk.length > 0) {
-      const chunkArr = await callTranslateApi(
+      const chunkArr = await callTranslateApiWithRetry(
         JSON.stringify(chunk, null, 2),
         targetLang,
         llmApiKey,
@@ -505,7 +545,7 @@ async function translateJson(jsonData: any, targetLang: string, customSystemProm
   return result;
 }
 
-const PUBLISH_FN_VERSION = "v5-graceful-quota-errors-2026-04-21";
+const PUBLISH_FN_VERSION = "v6-translate-retry-3x-2026-04-21";
 
 serve(async (req) => {
   console.log(`[publish-external] ${PUBLISH_FN_VERSION} ${req.method}`);

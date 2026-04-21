@@ -164,8 +164,8 @@ export function PublishLogsDialog({ open, onOpenChange, projectId }: PublishLogs
                             <span className="text-muted-foreground">语种 = {log.total} 任务</span>
                           </span>
                           <span className="flex items-center gap-1">
-                            <CheckCircle2 className="h-3 w-3 text-green-600" />
-                            <span className="text-green-700 dark:text-green-400">{log.success}</span>
+                            <CheckCircle2 className="h-3 w-3 text-success" />
+                            <span className="text-success">{log.success}</span>
                           </span>
                           {log.failed > 0 && (
                             <span className="flex items-center gap-1">
@@ -211,7 +211,7 @@ export function PublishLogsDialog({ open, onOpenChange, projectId }: PublishLogs
                                 {log.details.map((d, i) => (
                                   <div key={i} className="flex items-center gap-2 px-1.5 py-1 rounded hover:bg-muted/40">
                                     {d.success ? (
-                                      <CheckCircle2 className="h-3 w-3 text-green-600 shrink-0" />
+                                      <CheckCircle2 className="h-3 w-3 text-success shrink-0" />
                                     ) : (
                                       <XCircle className="h-3 w-3 text-destructive shrink-0" />
                                     )}

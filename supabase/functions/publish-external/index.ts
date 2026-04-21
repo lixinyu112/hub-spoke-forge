@@ -187,11 +187,15 @@ async function callTranslateApi(
   // System prompt 始终以目标语言强制指令开头，保证最高优先级
   let systemPrompt: string;
   let userPrompt: string;
+  // 重试时追加更强的提示
+  const retryHint = attempt > 1
+    ? `\n\n【重试提醒】这是第 ${attempt} 次尝试。上次输出未通过 ${langName} 语言纯度校验（混入了英文或其他非目标语言），请彻底重新翻译，确保 100% 输出 ${langName}。`
+    : "";
   if (customSystemPrompt?.trim()) {
-    systemPrompt = `${targetLangDirective}\n\n${customSystemPrompt.trim()}`;
+    systemPrompt = `${targetLangDirective}${retryHint}\n\n${customSystemPrompt.trim()}`;
     userPrompt = `${baseRules}\n\n请严格遵循以上系统指令中的翻译要求，并务必将输出语言锁定为 ${langName}。\n\nJSON 内容：\n${jsonStr}`;
   } else {
-    systemPrompt = `${targetLangDirective}\n\n${defaultSystemPrompt}`;
+    systemPrompt = `${targetLangDirective}${retryHint}\n\n${defaultSystemPrompt}`;
     userPrompt = `${baseRules}\n\nJSON 内容：\n${jsonStr}`;
   }
 
@@ -207,7 +211,8 @@ async function callTranslateApi(
         { role: "system", content: systemPrompt },
         { role: "user", content: userPrompt },
       ],
-      temperature: 0,
+      // 重试时略提高温度以打破固定输出
+      temperature: attempt === 1 ? 0 : 0.3,
     }),
   });
 

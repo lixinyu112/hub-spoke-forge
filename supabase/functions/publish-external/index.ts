@@ -41,6 +41,28 @@ function extractJsonFromResponse(response: string): unknown {
   }
 }
 
+function formatTranslationApiError(status: number, body: string): string {
+  const redactedBody = body.replace(/sk-[A-Za-z0-9_-]+/g, "sk-***");
+  try {
+    const parsed = JSON.parse(body);
+    const message = parsed?.error?.message || parsed?.message || redactedBody;
+    if (status === 401 && /额度已用尽|quota|RemainQuota/i.test(message)) {
+      return "Translation API 401: 翻译服务额度已用尽，请更新 CUSTOM_LLM_API_KEY 或补充额度后重试";
+    }
+    return `Translation API ${status}: ${String(message).replace(/sk-[A-Za-z0-9_-]+/g, "sk-***")}`;
+  } catch (_) {
+    if (status === 401 && /额度已用尽|quota|RemainQuota/i.test(redactedBody)) {
+      return "Translation API 401: 翻译服务额度已用尽，请更新 CUSTOM_LLM_API_KEY 或补充额度后重试";
+    }
+    return `Translation API ${status}: ${redactedBody}`;
+  }
+}
+
+function isTranslationAuthOrQuotaError(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error);
+  return /Translation API 401|额度已用尽|quota|RemainQuota|Unauthorized/i.test(message);
+}
+
 // Pure JS MD5 implementation (no dependencies, Deno-compatible)
 function md5(input: string): string {
   const bytes = new TextEncoder().encode(input);
@@ -190,7 +212,7 @@ async function callTranslateApi(
 
   if (!resp.ok) {
     const errText = await resp.text();
-    throw new Error(`Translation API ${resp.status}: ${errText}`);
+    throw new Error(formatTranslationApiError(resp.status, errText));
   }
 
   const result = await resp.json();
@@ -483,7 +505,7 @@ async function translateJson(jsonData: any, targetLang: string, customSystemProm
   return result;
 }
 
-const PUBLISH_FN_VERSION = "v4-robust-json-extract-2026-04-21";
+const PUBLISH_FN_VERSION = "v5-graceful-quota-errors-2026-04-21";
 
 serve(async (req) => {
   console.log(`[publish-external] ${PUBLISH_FN_VERSION} ${req.method}`);
@@ -511,7 +533,7 @@ serve(async (req) => {
       );
     }
 
-    const results: { item_id: string; language: string; success: boolean; error?: string }[] = [];
+    const results: { item_id: string; language: string; success: boolean; error?: string; retryable?: boolean }[] = [];
 
     for (const item of items) {
       for (const lang of languages) {
@@ -555,6 +577,7 @@ serve(async (req) => {
                 language: lang,
                 success: false,
                 error: `翻译失败（${lang}）: ${translateErr instanceof Error ? translateErr.message : String(translateErr)}`,
+                retryable: !isTranslationAuthOrQuotaError(translateErr),
               });
               continue;
             }
@@ -588,7 +611,7 @@ serve(async (req) => {
     const failCount = results.filter((r) => !r.success).length;
     return new Response(
       JSON.stringify({ results, total: results.length, failed: failCount }),
-      { status: failCount === results.length ? 502 : 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (e) {
     return new Response(

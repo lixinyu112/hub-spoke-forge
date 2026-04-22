@@ -737,7 +737,12 @@ export default function SpokeGenerator() {
                 </Button>
               </div>
               <div className="max-h-[240px] overflow-auto space-y-1">
-                {filteredDocs.length === 0 && (
+                {docsError && (
+                  <div className="rounded-md border border-destructive/40 bg-destructive/5 p-3 text-xs text-destructive whitespace-pre-wrap">
+                    {docsError}
+                  </div>
+                )}
+                {!docsError && filteredDocs.length === 0 && (
                   <p className="text-xs text-muted-foreground py-4 text-center">暂无文档，点击右上角「+」手动创建或刷新获取飞书文档</p>
                 )}
                 {filteredDocs.map((doc) => (

@@ -12,6 +12,7 @@ export async function fetchFeishuDocs(query?: string, folderToken?: string) {
   const res = await fetch(`${supabaseUrl}/functions/v1/feishu-docs?${params.toString()}`, {
     headers: {
       'apikey': anonKey,
+      'Authorization': `Bearer ${anonKey}`,
       'Content-Type': 'application/json',
     },
   });
@@ -20,7 +21,12 @@ export async function fetchFeishuDocs(query?: string, folderToken?: string) {
     const errBody = await res.text();
     throw new Error(`Feishu API error: ${errBody}`);
   }
-  return res.json();
+  const json = await res.json();
+  // Surface upstream Feishu errors that came back as 200 with code != 0
+  if (json && typeof json.code === 'number' && json.code !== 0) {
+    throw new Error(json.error || json.msg || `飞书 API 错误 code=${json.code}`);
+  }
+  return json;
 }
 
 export async function fetchFeishuDocContent(docToken: string, docType: string = 'docx') {

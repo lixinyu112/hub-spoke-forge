@@ -175,9 +175,13 @@ export default function SpokeGenerator() {
       }
 
       setFeishuDocs(docs);
-    } catch (e) {
+    } catch (e: any) {
       console.error("Failed to load documents:", e);
-      toast({ title: "文档加载失败", variant: "destructive" });
+      toast({
+        title: "飞书文档加载失败",
+        description: e?.message || "未知错误，请检查飞书应用对该文件夹的访问权限",
+        variant: "destructive",
+      });
     } finally {
       setLoadingDocs(false);
     }

@@ -48,7 +48,19 @@ Deno.serve(async (req) => {
         });
         const data = await res.json();
         if (data.code !== 0) {
-          return new Response(JSON.stringify(data), {
+          // Surface a structured, user-friendly error (esp. 1061004 forbidden)
+          const isForbidden = data.code === 1061004 || /forbidden/i.test(data.msg || '');
+          const friendlyMsg = isForbidden
+            ? `飞书应用无权访问此文件夹（folder_token=${folderToken}）。请在飞书云空间中将应用添加为该文件夹的协作者（可编辑/可查看），或检查 token 是否正确。原始错误: ${data.msg || 'forbidden'}`
+            : `飞书 API 返回错误 code=${data.code}: ${data.msg || 'unknown error'}`;
+          console.error('list_docs failed:', JSON.stringify(data));
+          return new Response(JSON.stringify({
+            code: data.code,
+            error: friendlyMsg,
+            feishu_raw: data,
+            data: { files: [], total: 0 },
+          }), {
+            status: 200,
             headers: { ...corsHeaders, 'Content-Type': 'application/json' },
           });
         }

@@ -64,6 +64,7 @@ export default function SpokeGenerator() {
   const [loadingDocs, setLoadingDocs] = useState(false);
   const [syncing, setSyncing] = useState(false);
   const [syncingDoc, setSyncingDoc] = useState<string | null>(null);
+  const [docsError, setDocsError] = useState<string | null>(null);
 
   // Single mode state
   const [pendingSave, setPendingSave] = useState<{
@@ -123,10 +124,12 @@ export default function SpokeGenerator() {
     const folderToken = themeObj?.feishu_doc_token;
     if (!folderToken) {
       setFeishuDocs([]);
+      setDocsError("当前主题未关联飞书文件夹 token，请先在「主题管理」中配置 feishu_doc_token");
       toast({ title: "当前主题未关联飞书文件夹", variant: "destructive" });
       return;
     }
     setLoadingDocs(true);
+    setDocsError(null);
     try {
       const res = await fetchFeishuDocs(feishuSearch || undefined, folderToken);
       let docs: FeishuDoc[] = [];
@@ -177,9 +180,16 @@ export default function SpokeGenerator() {
       setFeishuDocs(docs);
     } catch (e: any) {
       console.error("Failed to load documents:", e);
+      const msg = e?.message || "未知错误";
+      const isForbidden = /forbidden|无权|1061004/i.test(msg);
+      const friendly = isForbidden
+        ? `飞书应用无访问该文件夹的权限。请到飞书云空间，将本应用添加为该文件夹的协作者（建议「可编辑」），然后点击「重新加载」重试。\n\n原始错误：${msg}`
+        : msg;
+      setFeishuDocs([]);
+      setDocsError(friendly);
       toast({
-        title: "飞书文档加载失败",
-        description: e?.message || "未知错误，请检查飞书应用对该文件夹的访问权限",
+        title: isForbidden ? "无飞书文档权限" : "飞书文档加载失败",
+        description: isForbidden ? "请将飞书应用添加为该文件夹的协作者后重试" : msg,
         variant: "destructive",
       });
     } finally {
@@ -727,7 +737,12 @@ export default function SpokeGenerator() {
                 </Button>
               </div>
               <div className="max-h-[240px] overflow-auto space-y-1">
-                {filteredDocs.length === 0 && (
+                {docsError && (
+                  <div className="rounded-md border border-destructive/40 bg-destructive/5 p-3 text-xs text-destructive whitespace-pre-wrap">
+                    {docsError}
+                  </div>
+                )}
+                {!docsError && filteredDocs.length === 0 && (
                   <p className="text-xs text-muted-foreground py-4 text-center">暂无文档，点击右上角「+」手动创建或刷新获取飞书文档</p>
                 )}
                 {filteredDocs.map((doc) => (

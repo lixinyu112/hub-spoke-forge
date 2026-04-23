@@ -263,7 +263,8 @@ export default function ContentBrowser() {
 
           for (const [lang, failedGroup] of retryByLang) {
             const retryItems = failedGroup.map((f) => {
-              const item = items.find((it) => it.id === f.item_id);
+              // 仅重试 validItems 中的项，跳过预校验失败的空内容项
+              const item = validItems.find((it) => it.id === f.item_id);
               return item ? { id: item.id, type: item.type, title: item.title, json_data: item.json_data } : null;
             }).filter(Boolean);
 

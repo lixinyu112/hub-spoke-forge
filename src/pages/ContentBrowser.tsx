@@ -266,7 +266,7 @@ export default function ContentBrowser() {
             const retryItems = failedGroup.map((f) => {
               // 仅重试 validItems 中的项，跳过预校验失败的空内容项
               const item = validItems.find((it) => it.id === f.item_id);
-              return item ? { id: item.id, type: item.type, title: item.title, json_data: item.json_data } : null;
+              return item ? { id: item.id, type: item.type, title: item.title, slug: item.slug, json_data: item.json_data } : null;
             }).filter(Boolean);
 
             if (retryItems.length === 0) continue;

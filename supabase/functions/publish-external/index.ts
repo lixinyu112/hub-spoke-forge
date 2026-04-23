@@ -708,6 +708,13 @@ serve(async (req) => {
             continue;
           }
 
+          // 注入顶层 slug（CMS dl_hub/dl_spoke 表 slug 字段 NOT NULL，必须保证非空）
+          const finalSlug = resolveSlug(item, translatedData);
+          const payload: any = { ...(translatedData as any), slug: finalSlug };
+          // 同步 hubSlug 与 slug 一致（hub 类型）以避免下游路由冲突
+          if (sourceType === "hub" && !payload.hubSlug) payload.hubSlug = finalSlug;
+          console.log(`[publish] sending item=${item.id} type=${sourceType} lang=${lang} slug=${finalSlug}`);
+
           const resp = await fetch(url, {
             method: "POST",
             headers: {
@@ -716,7 +723,7 @@ serve(async (req) => {
               "X-Api-Timestamp": timestamp,
               "Content-Type": "application/json",
             },
-            body: JSON.stringify(translatedData),
+            body: JSON.stringify(payload),
           });
 
           const respText = await resp.text();

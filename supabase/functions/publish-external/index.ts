@@ -746,7 +746,7 @@ serve(async (req) => {
               const isCodeStrFail = typeof code === "string" && !["0", "200", "ok", "success"].includes(code.toLowerCase());
               const isSuccessFalse = success === false;
               if (isCodeFail || isCodeStrFail || isSuccessFalse) {
-                bizError = `CMS 业务错误 code=${code ?? "?"}: ${errMsg || respText.slice(0, 300)}`;
+                bizError = `Crescendia API 业务错误 code=${code ?? "?"}: ${errMsg || respText.slice(0, 300)}`;
               }
             }
             if (bizError) {

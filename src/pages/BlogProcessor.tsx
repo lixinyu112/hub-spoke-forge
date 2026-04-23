@@ -465,6 +465,7 @@ export default function BlogProcessor() {
     if (!currentProject || selectedPostIds.size === 0) return;
     setPublishing(true);
     setPublishReport(null);
+    const startedAt = Date.now();
 
     const selectedPosts = posts.filter((p) => selectedPostIds.has(p.id) && p.json_data && !p.json_data.error);
     const total = selectedPosts.length * languages.length;

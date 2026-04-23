@@ -224,6 +224,7 @@ export default function ContentBrowser() {
                   id: item.id,
                   type: item.type,
                   title: item.title,
+                  slug: item.slug,
                   json_data: item.json_data,
                 })),
                 languages: [lang],

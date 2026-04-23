@@ -1081,6 +1081,12 @@ export default function BlogProcessor() {
         posts={allPosts.length > 0 ? allPosts : posts}
         selectedGroupId={selectedGroup !== "all" && selectedGroup !== "ungrouped" ? selectedGroup : undefined}
       />
+
+      <PublishLogsDialog
+        open={logsOpen}
+        onOpenChange={setLogsOpen}
+        projectId={currentProject?.id || null}
+      />
     </div>
   );
 }

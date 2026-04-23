@@ -360,7 +360,7 @@ serve(async (req) => {
         const articles = batch.map((b) => b.article);
 
         try {
-          const cmsBaseUrl = CMS_URLS[environment] || CMS_URLS.production;
+          const cmsBaseUrl = CMS_URLS[env];
           const resp = await fetch(`${cmsBaseUrl}/api/blog-import`, {
             method: "POST",
             headers: {

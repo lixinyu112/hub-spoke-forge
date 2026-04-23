@@ -582,7 +582,7 @@ async function translateJson(jsonData: any, targetLang: string, customSystemProm
   return result;
 }
 
-const PUBLISH_FN_VERSION = "v7-native-ratio-validation-2026-04-23";
+const PUBLISH_FN_VERSION = "v8-cms-body-inspect-2026-04-23";
 
 serve(async (req) => {
   console.log(`[publish-external] ${PUBLISH_FN_VERSION} ${req.method}`);
@@ -662,6 +662,20 @@ serve(async (req) => {
             translatedData = item.json_data;
           }
 
+          // 内容健全性检查：避免发布空 components / 空 JSON
+          const compArr = Array.isArray((translatedData as any)?.components)
+            ? (translatedData as any).components
+            : null;
+          if (!translatedData || (compArr !== null && compArr.length === 0)) {
+            results.push({
+              item_id: item.id,
+              language: lang,
+              success: false,
+              error: `内容为空（${sourceType} 无 components 或 json_data 缺失），请先生成 JSON 再发布`,
+            });
+            continue;
+          }
+
           const resp = await fetch(url, {
             method: "POST",
             headers: {
@@ -673,11 +687,36 @@ serve(async (req) => {
             body: JSON.stringify(translatedData),
           });
 
+          const respText = await resp.text();
           if (!resp.ok) {
-            const errText = await resp.text();
-            results.push({ item_id: item.id, language: lang, success: false, error: `${resp.status}: ${errText}` });
+            results.push({ item_id: item.id, language: lang, success: false, error: `${resp.status}: ${respText.slice(0, 500)}` });
           } else {
-            results.push({ item_id: item.id, language: lang, success: true });
+            // 检查 CMS 业务层错误：HTTP 200 但 body 中 code !== 0 / success=false / 含 error 字段
+            let bizError: string | null = null;
+            let parsedBody: any = null;
+            try {
+              parsedBody = JSON.parse(respText);
+            } catch {
+              // 非 JSON 响应当作成功（少数 CMS 直接返回空体）
+            }
+            if (parsedBody && typeof parsedBody === "object") {
+              const code = parsedBody.code;
+              const success = parsedBody.success;
+              const errMsg = parsedBody.error || parsedBody.message || parsedBody.msg;
+              const isCodeFail = typeof code === "number" && code !== 0;
+              const isCodeStrFail = typeof code === "string" && code !== "0" && code.toLowerCase() !== "ok" && code.toLowerCase() !== "success";
+              const isSuccessFalse = success === false;
+              if (isCodeFail || isCodeStrFail || isSuccessFalse) {
+                bizError = `CMS 业务错误 code=${code ?? "?"}: ${errMsg || respText.slice(0, 300)}`;
+              }
+            }
+            if (bizError) {
+              console.warn(`[publish] biz-fail item=${item.id} lang=${lang} url=${url} body=${respText.slice(0, 500)}`);
+              results.push({ item_id: item.id, language: lang, success: false, error: bizError });
+            } else {
+              console.log(`[publish] success item=${item.id} lang=${lang} url=${url} bodyLen=${respText.length}`);
+              results.push({ item_id: item.id, language: lang, success: true });
+            }
           }
         } catch (fetchErr) {
           results.push({ item_id: item.id, language: lang, success: false, error: String(fetchErr) });

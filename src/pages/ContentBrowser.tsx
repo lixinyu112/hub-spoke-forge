@@ -214,8 +214,8 @@ export default function ContentBrowser() {
       setPublishProgress({ total: totalTasks, done: invalidItems.length * languages.length });
       let completedTasks = invalidItems.length * languages.length;
 
-      for (let i = 0; i < items.length; i += BATCH_SIZE) {
-        const batch = items.slice(i, i + BATCH_SIZE);
+      for (let i = 0; i < validItems.length; i += BATCH_SIZE) {
+        const batch = validItems.slice(i, i + BATCH_SIZE);
         for (const lang of languages) {
           try {
             const { data: extResult, error: extError } = await supabase.functions.invoke("publish-external", {

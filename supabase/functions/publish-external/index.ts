@@ -329,17 +329,21 @@ function countEnglishStopwords(text: string): number {
   return count;
 }
 
-function validateLanguageFingerprint(data: any, targetLang: string): void {
+function validateLanguageFingerprint(data: any, targetLang: string, lenient: boolean = false): void {
   const sample = extractNaturalText(data);
   if (!sample.trim()) {
     console.log(`[validate] lang=${targetLang} skip: no natural text`);
     return;
   }
 
-  const hasKorean = /[\uAC00-\uD7AF]/.test(sample);
-  const hasJapaneseKana = /[\u3040-\u309F\u30A0-\u30FF]/.test(sample); // 平假名/片假名
-  const hasChinese = /[\u4E00-\u9FFF]/.test(sample);
-  const hasCyrillic = /[\u0400-\u04FF]/.test(sample);
+  const koreanChars = (sample.match(/[\uAC00-\uD7AF]/g) || []).length;
+  const japaneseKanaChars = (sample.match(/[\u3040-\u309F\u30A0-\u30FF]/g) || []).length;
+  const chineseChars = (sample.match(/[\u4E00-\u9FFF]/g) || []).length;
+  const cyrillicChars = (sample.match(/[\u0400-\u04FF]/g) || []).length;
+  const hasKorean = koreanChars > 0;
+  const hasJapaneseKana = japaneseKanaChars > 0;
+  const hasChinese = chineseChars > 0;
+  const hasCyrillic = cyrillicChars > 0;
 
   // 拉丁字母比例（用于检测 es/pt/en 是否被翻译，以及是否还残留大量英文）
   const latinChars = (sample.match(/[A-Za-z]/g) || []).length;
@@ -350,52 +354,75 @@ function validateLanguageFingerprint(data: any, targetLang: string): void {
   const spanishMarkers = (sample.match(/[áéíóúüñ¡¿]/gi) || []).length;
   const portugueseMarkers = (sample.match(/[áéíóúâêôãõàç]/gi) || []).length;
 
-  // 英语停用词命中数（用于检测 es/pt/ko/ja/ru/zh 是否仍残留大量英文）
+  // 英语停用词命中密度：每千字符的命中数（避免长文本累积误判）
   const englishHits = countEnglishStopwords(sample);
+  const englishHitsPer1k = sample.length > 0 ? (englishHits * 1000) / sample.length : 0;
+
+  // 母语脚本占比（针对 CJK / 西里尔）
+  const nativeRatio = (() => {
+    if (totalNonSpace === 0) return 0;
+    switch (targetLang) {
+      case "ko": return koreanChars / totalNonSpace;
+      case "ja": return (japaneseKanaChars + chineseChars) / totalNonSpace;
+      case "zh": return chineseChars / totalNonSpace;
+      case "ru": return cyrillicChars / totalNonSpace;
+      default: return 0;
+    }
+  })();
 
   console.log(
-    `[validate] lang=${targetLang} sampleLen=${sample.length} latinRatio=${latinRatio.toFixed(2)} ` +
-    `spMarks=${spanishMarkers} ptMarks=${portugueseMarkers} engHits=${englishHits} ` +
+    `[validate] lang=${targetLang} lenient=${lenient} sampleLen=${sample.length} ` +
+    `latinRatio=${latinRatio.toFixed(2)} nativeRatio=${nativeRatio.toFixed(2)} ` +
+    `spMarks=${spanishMarkers} ptMarks=${portugueseMarkers} ` +
+    `engHits=${englishHits} engPer1k=${englishHitsPer1k.toFixed(1)} ` +
     `ko=${hasKorean} ja=${hasJapaneseKana} zh=${hasChinese} cyr=${hasCyrillic}`,
   );
+
+  // 对 CJK/俄语：核心校验是"母语脚本占比"，而非英文停用词数量。
+  // 技术类文章（游戏/3D/AI）大量保留英文术语（Mod, Guide, 3D, Custom, Asset 等）
+  // 是合理的本地化习惯，不应判定为翻译失败。
+  // 严格模式（前几次尝试）阈值较高，宽松模式（最后一次重试后）阈值较低，避免整篇发布失败。
+  const NATIVE_RATIO_STRICT = 0.5;   // 至少一半字符是母语脚本
+  const NATIVE_RATIO_LENIENT = 0.25; // 宽松模式：四分之一以上即可
+  const nativeMin = lenient ? NATIVE_RATIO_LENIENT : NATIVE_RATIO_STRICT;
 
   switch (targetLang) {
     case "ko":
       if (!hasKorean) {
         throw new Error(`目标语言为韩语但输出未包含任何韩文字符${hasJapaneseKana ? "（疑似返回了日语）" : ""}`);
       }
-      if (englishHits >= 8) {
-        throw new Error(`目标语言为韩语但输出残留大量英文单词（命中 ${englishHits} 个英语停用词）`);
+      if (nativeRatio < nativeMin) {
+        throw new Error(`目标语言为韩语但韩文字符占比过低（${(nativeRatio * 100).toFixed(0)}% < ${nativeMin * 100}%），疑似大量未翻译`);
       }
       break;
     case "ja":
       if (!hasJapaneseKana && !hasChinese) {
         throw new Error(`目标语言为日语但输出未包含日语假名`);
       }
-      if (hasKorean) {
-        throw new Error(`目标语言为日语但输出包含韩文字符`);
+      if (hasKorean && koreanChars > japaneseKanaChars) {
+        throw new Error(`目标语言为日语但输出主要为韩文字符`);
       }
-      if (englishHits >= 8) {
-        throw new Error(`目标语言为日语但输出残留大量英文单词（命中 ${englishHits} 个英语停用词）`);
+      if (nativeRatio < nativeMin) {
+        throw new Error(`目标语言为日语但日文（假名+汉字）占比过低（${(nativeRatio * 100).toFixed(0)}% < ${nativeMin * 100}%），疑似大量未翻译`);
       }
       break;
     case "zh":
       if (!hasChinese) {
         throw new Error(`目标语言为中文但输出未包含中文字符`);
       }
-      if (hasKorean || hasJapaneseKana) {
-        throw new Error(`目标语言为中文但输出混入了${hasKorean ? "韩语" : "日语"}字符`);
+      if ((hasKorean && koreanChars > chineseChars) || (hasJapaneseKana && japaneseKanaChars > chineseChars / 4)) {
+        throw new Error(`目标语言为中文但输出大量混入了${hasKorean ? "韩语" : "日语假名"}字符`);
       }
-      if (englishHits >= 8) {
-        throw new Error(`目标语言为中文但输出残留大量英文单词（命中 ${englishHits} 个英语停用词）`);
+      if (nativeRatio < nativeMin) {
+        throw new Error(`目标语言为中文但中文字符占比过低（${(nativeRatio * 100).toFixed(0)}% < ${nativeMin * 100}%），疑似大量未翻译`);
       }
       break;
     case "ru":
       if (!hasCyrillic) {
         throw new Error(`目标语言为俄语但输出未包含西里尔字符`);
       }
-      if (englishHits >= 8) {
-        throw new Error(`目标语言为俄语但输出残留大量英文单词（命中 ${englishHits} 个英语停用词）`);
+      if (nativeRatio < nativeMin) {
+        throw new Error(`目标语言为俄语但西里尔字符占比过低（${(nativeRatio * 100).toFixed(0)}% < ${nativeMin * 100}%），疑似大量未翻译`);
       }
       break;
     case "es":

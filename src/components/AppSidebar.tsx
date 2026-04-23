@@ -1,4 +1,4 @@
-import { FileText, Sparkles, Network, Eye, BookOpen } from "lucide-react";
+import { FileText, Sparkles, Network, Eye, BookOpen, History } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
 import { useLocation } from "react-router-dom";
 import { ThemeToggle } from "@/components/ThemeToggle";
@@ -22,6 +22,7 @@ const items = [
   { title: "3. Hub 合成器", url: "/hub-synthesizer", icon: Network },
   { title: "4. Blog 加工器", url: "/blog-processor", icon: BookOpen },
   { title: "5. 内容浏览", url: "/browser", icon: Eye },
+  { title: "6. 发布日志", url: "/publish-logs", icon: History },
 ];
 
 export function AppSidebar() {

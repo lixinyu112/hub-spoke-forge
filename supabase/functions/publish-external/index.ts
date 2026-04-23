@@ -166,11 +166,12 @@ async function callTranslateApi(
   llmApiKey: string,
   customSystemPrompt?: string,
   attempt: number = 1,
+  lenient: boolean = false,
 ): Promise<any> {
   const langName = LANG_NAMES[targetLang] || targetLang;
 
   // 强制目标语言指令——置于最高优先级
-  const targetLangDirective = `【目标语言强制要求】\n本次翻译的目标语言是：${langName}（ISO 代码：${targetLang}）。\n输出文本必须 100% 为 ${langName}，禁止混入任何其他语言（包括但不限于日语、中文、英文等非目标语言）。\n如果你不确定某个词的 ${langName} 表达，请使用最贴近的 ${langName} 词汇，绝不能使用其他语言代替。`;
+  const targetLangDirective = `【目标语言强制要求】\n本次翻译的目标语言是：${langName}（ISO 代码：${targetLang}）。\n输出文本必须 100% 为 ${langName}，禁止混入任何其他语言（包括但不限于日语、中文、英文等非目标语言）。\n如果你不确定某个词的 ${langName} 表达，请使用最贴近的 ${langName} 词汇，绝不能使用其他语言代替。\n注意：行业通用的英文术语缩写（如 3D / AI / API / SDK / Mod 等专有名词或工具名）可保留原文，但所有自然语言句子必须翻译为 ${langName}。`;
 
   const defaultSystemPrompt = "你是一个精确的 JSON 翻译引擎，只输出翻译后的 JSON。";
 
@@ -182,14 +183,14 @@ async function callTranslateApi(
 4. 不要翻译 type、status 等枚举值
 5. 保持 JSON 结构完全不变
 6. 直接输出翻译后的 JSON，不要添加任何解释
-7. 所有翻译后的文本必须是 ${langName}，绝不能输出其他语言`;
+7. 所有自然语言句子必须翻译为 ${langName}（行业通用英文术语缩写如 3D/AI/API/Mod 可保留）`;
 
   // System prompt 始终以目标语言强制指令开头，保证最高优先级
   let systemPrompt: string;
   let userPrompt: string;
   // 重试时追加更强的提示
   const retryHint = attempt > 1
-    ? `\n\n【重试提醒】这是第 ${attempt} 次尝试。上次输出未通过 ${langName} 语言纯度校验（混入了英文或其他非目标语言），请彻底重新翻译，确保 100% 输出 ${langName}。`
+    ? `\n\n【重试提醒】这是第 ${attempt} 次尝试。上次输出未通过 ${langName} 语言纯度校验（${langName} 字符占比偏低或英文密度过高），请彻底重新翻译，确保正文 100% 输出 ${langName}。`
     : "";
   if (customSystemPrompt?.trim()) {
     systemPrompt = `${targetLangDirective}${retryHint}\n\n${customSystemPrompt.trim()}`;
@@ -226,7 +227,7 @@ async function callTranslateApi(
   const parsed = extractJsonFromResponse(content);
 
   // 语言指纹校验：确保输出语言匹配目标
-  validateLanguageFingerprint(parsed, targetLang);
+  validateLanguageFingerprint(parsed, targetLang, lenient);
 
   return parsed;
 }
@@ -236,6 +237,7 @@ const TRANSLATE_MAX_ATTEMPTS = 3;
 /**
  * 包装 callTranslateApi，对"语言指纹校验失败 / JSON 解析失败"等可恢复错误最多重试 3 次。
  * 鉴权 / 额度类错误（401、quota）不会重试，立即抛出。
+ * 策略：前两次严格校验，最后一次启用宽松校验，避免因边缘案例导致整篇发布失败。
  */
 async function callTranslateApiWithRetry(
   jsonStr: string,
@@ -244,18 +246,20 @@ async function callTranslateApiWithRetry(
   customSystemPrompt?: string,
 ): Promise<any> {
   let lastErr: unknown;
+  let lastLenientResult: any = undefined;
   for (let attempt = 1; attempt <= TRANSLATE_MAX_ATTEMPTS; attempt++) {
+    const lenient = attempt === TRANSLATE_MAX_ATTEMPTS; // 最后一次重试启用宽松校验
     try {
-      const data = await callTranslateApi(jsonStr, targetLang, llmApiKey, customSystemPrompt, attempt);
+      const data = await callTranslateApi(jsonStr, targetLang, llmApiKey, customSystemPrompt, attempt, lenient);
       if (attempt > 1) {
-        console.log(`[translate-retry] success lang=${targetLang} attempt=${attempt}`);
+        console.log(`[translate-retry] success lang=${targetLang} attempt=${attempt} lenient=${lenient}`);
       }
       return data;
     } catch (err) {
       lastErr = err;
       if (isTranslationAuthOrQuotaError(err)) throw err;
       const msg = err instanceof Error ? err.message : String(err);
-      console.warn(`[translate-retry] attempt=${attempt}/${TRANSLATE_MAX_ATTEMPTS} lang=${targetLang} failed: ${msg}`);
+      console.warn(`[translate-retry] attempt=${attempt}/${TRANSLATE_MAX_ATTEMPTS} lang=${targetLang} lenient=${lenient} failed: ${msg}`);
       if (attempt < TRANSLATE_MAX_ATTEMPTS) {
         await new Promise((r) => setTimeout(r, 400 * attempt));
       }
@@ -329,17 +333,21 @@ function countEnglishStopwords(text: string): number {
   return count;
 }
 
-function validateLanguageFingerprint(data: any, targetLang: string): void {
+function validateLanguageFingerprint(data: any, targetLang: string, lenient: boolean = false): void {
   const sample = extractNaturalText(data);
   if (!sample.trim()) {
     console.log(`[validate] lang=${targetLang} skip: no natural text`);
     return;
   }
 
-  const hasKorean = /[\uAC00-\uD7AF]/.test(sample);
-  const hasJapaneseKana = /[\u3040-\u309F\u30A0-\u30FF]/.test(sample); // 平假名/片假名
-  const hasChinese = /[\u4E00-\u9FFF]/.test(sample);
-  const hasCyrillic = /[\u0400-\u04FF]/.test(sample);
+  const koreanChars = (sample.match(/[\uAC00-\uD7AF]/g) || []).length;
+  const japaneseKanaChars = (sample.match(/[\u3040-\u309F\u30A0-\u30FF]/g) || []).length;
+  const chineseChars = (sample.match(/[\u4E00-\u9FFF]/g) || []).length;
+  const cyrillicChars = (sample.match(/[\u0400-\u04FF]/g) || []).length;
+  const hasKorean = koreanChars > 0;
+  const hasJapaneseKana = japaneseKanaChars > 0;
+  const hasChinese = chineseChars > 0;
+  const hasCyrillic = cyrillicChars > 0;
 
   // 拉丁字母比例（用于检测 es/pt/en 是否被翻译，以及是否还残留大量英文）
   const latinChars = (sample.match(/[A-Za-z]/g) || []).length;
@@ -350,91 +358,120 @@ function validateLanguageFingerprint(data: any, targetLang: string): void {
   const spanishMarkers = (sample.match(/[áéíóúüñ¡¿]/gi) || []).length;
   const portugueseMarkers = (sample.match(/[áéíóúâêôãõàç]/gi) || []).length;
 
-  // 英语停用词命中数（用于检测 es/pt/ko/ja/ru/zh 是否仍残留大量英文）
+  // 英语停用词命中密度：每千字符的命中数（避免长文本累积误判）
   const englishHits = countEnglishStopwords(sample);
+  const englishHitsPer1k = sample.length > 0 ? (englishHits * 1000) / sample.length : 0;
+
+  // 母语脚本占比（针对 CJK / 西里尔）
+  const nativeRatio = (() => {
+    if (totalNonSpace === 0) return 0;
+    switch (targetLang) {
+      case "ko": return koreanChars / totalNonSpace;
+      case "ja": return (japaneseKanaChars + chineseChars) / totalNonSpace;
+      case "zh": return chineseChars / totalNonSpace;
+      case "ru": return cyrillicChars / totalNonSpace;
+      default: return 0;
+    }
+  })();
 
   console.log(
-    `[validate] lang=${targetLang} sampleLen=${sample.length} latinRatio=${latinRatio.toFixed(2)} ` +
-    `spMarks=${spanishMarkers} ptMarks=${portugueseMarkers} engHits=${englishHits} ` +
+    `[validate] lang=${targetLang} lenient=${lenient} sampleLen=${sample.length} ` +
+    `latinRatio=${latinRatio.toFixed(2)} nativeRatio=${nativeRatio.toFixed(2)} ` +
+    `spMarks=${spanishMarkers} ptMarks=${portugueseMarkers} ` +
+    `engHits=${englishHits} engPer1k=${englishHitsPer1k.toFixed(1)} ` +
     `ko=${hasKorean} ja=${hasJapaneseKana} zh=${hasChinese} cyr=${hasCyrillic}`,
   );
+
+  // 对 CJK/俄语：核心校验是"母语脚本占比"，而非英文停用词数量。
+  // 技术类文章（游戏/3D/AI）大量保留英文术语（Mod, Guide, 3D, Custom, Asset 等）
+  // 是合理的本地化习惯，不应判定为翻译失败。
+  // 严格模式（前几次尝试）阈值较高，宽松模式（最后一次重试后）阈值较低，避免整篇发布失败。
+  const NATIVE_RATIO_STRICT = 0.5;   // 至少一半字符是母语脚本
+  const NATIVE_RATIO_LENIENT = 0.25; // 宽松模式：四分之一以上即可
+  const nativeMin = lenient ? NATIVE_RATIO_LENIENT : NATIVE_RATIO_STRICT;
 
   switch (targetLang) {
     case "ko":
       if (!hasKorean) {
         throw new Error(`目标语言为韩语但输出未包含任何韩文字符${hasJapaneseKana ? "（疑似返回了日语）" : ""}`);
       }
-      if (englishHits >= 8) {
-        throw new Error(`目标语言为韩语但输出残留大量英文单词（命中 ${englishHits} 个英语停用词）`);
+      if (nativeRatio < nativeMin) {
+        throw new Error(`目标语言为韩语但韩文字符占比过低（${(nativeRatio * 100).toFixed(0)}% < ${nativeMin * 100}%），疑似大量未翻译`);
       }
       break;
     case "ja":
       if (!hasJapaneseKana && !hasChinese) {
         throw new Error(`目标语言为日语但输出未包含日语假名`);
       }
-      if (hasKorean) {
-        throw new Error(`目标语言为日语但输出包含韩文字符`);
+      if (hasKorean && koreanChars > japaneseKanaChars) {
+        throw new Error(`目标语言为日语但输出主要为韩文字符`);
       }
-      if (englishHits >= 8) {
-        throw new Error(`目标语言为日语但输出残留大量英文单词（命中 ${englishHits} 个英语停用词）`);
+      if (nativeRatio < nativeMin) {
+        throw new Error(`目标语言为日语但日文（假名+汉字）占比过低（${(nativeRatio * 100).toFixed(0)}% < ${nativeMin * 100}%），疑似大量未翻译`);
       }
       break;
     case "zh":
       if (!hasChinese) {
         throw new Error(`目标语言为中文但输出未包含中文字符`);
       }
-      if (hasKorean || hasJapaneseKana) {
-        throw new Error(`目标语言为中文但输出混入了${hasKorean ? "韩语" : "日语"}字符`);
+      if ((hasKorean && koreanChars > chineseChars) || (hasJapaneseKana && japaneseKanaChars > chineseChars / 4)) {
+        throw new Error(`目标语言为中文但输出大量混入了${hasKorean ? "韩语" : "日语假名"}字符`);
       }
-      if (englishHits >= 8) {
-        throw new Error(`目标语言为中文但输出残留大量英文单词（命中 ${englishHits} 个英语停用词）`);
+      if (nativeRatio < nativeMin) {
+        throw new Error(`目标语言为中文但中文字符占比过低（${(nativeRatio * 100).toFixed(0)}% < ${nativeMin * 100}%），疑似大量未翻译`);
       }
       break;
     case "ru":
       if (!hasCyrillic) {
         throw new Error(`目标语言为俄语但输出未包含西里尔字符`);
       }
-      if (englishHits >= 8) {
-        throw new Error(`目标语言为俄语但输出残留大量英文单词（命中 ${englishHits} 个英语停用词）`);
+      if (nativeRatio < nativeMin) {
+        throw new Error(`目标语言为俄语但西里尔字符占比过低（${(nativeRatio * 100).toFixed(0)}% < ${nativeMin * 100}%），疑似大量未翻译`);
       }
       break;
-    case "es":
+    case "es": {
       if (latinRatio < 0.5) {
         throw new Error(`目标语言为西班牙语但输出未以拉丁字母为主`);
       }
       if (hasChinese || hasKorean || hasJapaneseKana || hasCyrillic) {
         throw new Error(`目标语言为西班牙语但输出混入了非拉丁字符`);
       }
-      // 关键拦截：英语停用词命中过多，或西语特征字符过少（同时文本足够长）
-      if (englishHits >= 5) {
+      // 用密度（每千字符英语停用词数）替代绝对计数，避免长文本累积误判
+      const engDensityMax = lenient ? 25 : 12;
+      if (englishHitsPer1k > engDensityMax && englishHits >= 5) {
         throw new Error(
-          `目标语言为西班牙语但输出残留大量英文单词（命中 ${englishHits} 个英语停用词如 the/and/for/guide），疑似未翻译`,
+          `目标语言为西班牙语但输出英文密度过高（每千字符 ${englishHitsPer1k.toFixed(1)} 个英语停用词），疑似未翻译`,
         );
       }
-      if (sample.length >= 200 && spanishMarkers < 2) {
+      const spMarkersMin = lenient ? 1 : 2;
+      if (sample.length >= 400 && spanishMarkers < spMarkersMin) {
         throw new Error(
           `目标语言为西班牙语但输出几乎不含西语特征字符（á/é/í/ó/ú/ñ/¡/¿ 仅 ${spanishMarkers} 个），疑似未翻译保留了英文`,
         );
       }
       break;
-    case "pt":
+    }
+    case "pt": {
       if (latinRatio < 0.5) {
         throw new Error(`目标语言为葡萄牙语但输出未以拉丁字母为主`);
       }
       if (hasChinese || hasKorean || hasJapaneseKana || hasCyrillic) {
         throw new Error(`目标语言为葡萄牙语但输出混入了非拉丁字符`);
       }
-      if (englishHits >= 5) {
+      const engDensityMax = lenient ? 25 : 12;
+      if (englishHitsPer1k > engDensityMax && englishHits >= 5) {
         throw new Error(
-          `目标语言为葡萄牙语但输出残留大量英文单词（命中 ${englishHits} 个英语停用词），疑似未翻译`,
+          `目标语言为葡萄牙语但输出英文密度过高（每千字符 ${englishHitsPer1k.toFixed(1)} 个英语停用词），疑似未翻译`,
         );
       }
-      if (sample.length >= 200 && portugueseMarkers < 2) {
+      const ptMarkersMin = lenient ? 1 : 2;
+      if (sample.length >= 400 && portugueseMarkers < ptMarkersMin) {
         throw new Error(
           `目标语言为葡萄牙语但输出几乎不含葡语特征字符（á/é/í/ó/ú/ã/õ/ç 仅 ${portugueseMarkers} 个），疑似未翻译保留了英文`,
         );
       }
       break;
+    }
     case "en":
       if (latinRatio < 0.5) {
         throw new Error(`目标语言为英语但输出未以拉丁字母为主`);
@@ -545,7 +582,7 @@ async function translateJson(jsonData: any, targetLang: string, customSystemProm
   return result;
 }
 
-const PUBLISH_FN_VERSION = "v6-translate-retry-3x-2026-04-21";
+const PUBLISH_FN_VERSION = "v7-native-ratio-validation-2026-04-23";
 
 serve(async (req) => {
   console.log(`[publish-external] ${PUBLISH_FN_VERSION} ${req.method}`);

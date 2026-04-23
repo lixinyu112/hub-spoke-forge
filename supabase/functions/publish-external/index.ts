@@ -582,7 +582,7 @@ async function translateJson(jsonData: any, targetLang: string, customSystemProm
   return result;
 }
 
-const PUBLISH_FN_VERSION = "v6-translate-retry-3x-2026-04-21";
+const PUBLISH_FN_VERSION = "v7-native-ratio-validation-2026-04-23";
 
 serve(async (req) => {
   console.log(`[publish-external] ${PUBLISH_FN_VERSION} ${req.method}`);

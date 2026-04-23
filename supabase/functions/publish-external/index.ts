@@ -425,43 +425,49 @@ function validateLanguageFingerprint(data: any, targetLang: string, lenient: boo
         throw new Error(`目标语言为俄语但西里尔字符占比过低（${(nativeRatio * 100).toFixed(0)}% < ${nativeMin * 100}%），疑似大量未翻译`);
       }
       break;
-    case "es":
+    case "es": {
       if (latinRatio < 0.5) {
         throw new Error(`目标语言为西班牙语但输出未以拉丁字母为主`);
       }
       if (hasChinese || hasKorean || hasJapaneseKana || hasCyrillic) {
         throw new Error(`目标语言为西班牙语但输出混入了非拉丁字符`);
       }
-      // 关键拦截：英语停用词命中过多，或西语特征字符过少（同时文本足够长）
-      if (englishHits >= 5) {
+      // 用密度（每千字符英语停用词数）替代绝对计数，避免长文本累积误判
+      const engDensityMax = lenient ? 25 : 12;
+      if (englishHitsPer1k > engDensityMax && englishHits >= 5) {
         throw new Error(
-          `目标语言为西班牙语但输出残留大量英文单词（命中 ${englishHits} 个英语停用词如 the/and/for/guide），疑似未翻译`,
+          `目标语言为西班牙语但输出英文密度过高（每千字符 ${englishHitsPer1k.toFixed(1)} 个英语停用词），疑似未翻译`,
         );
       }
-      if (sample.length >= 200 && spanishMarkers < 2) {
+      const spMarkersMin = lenient ? 1 : 2;
+      if (sample.length >= 400 && spanishMarkers < spMarkersMin) {
         throw new Error(
           `目标语言为西班牙语但输出几乎不含西语特征字符（á/é/í/ó/ú/ñ/¡/¿ 仅 ${spanishMarkers} 个），疑似未翻译保留了英文`,
         );
       }
       break;
-    case "pt":
+    }
+    case "pt": {
       if (latinRatio < 0.5) {
         throw new Error(`目标语言为葡萄牙语但输出未以拉丁字母为主`);
       }
       if (hasChinese || hasKorean || hasJapaneseKana || hasCyrillic) {
         throw new Error(`目标语言为葡萄牙语但输出混入了非拉丁字符`);
       }
-      if (englishHits >= 5) {
+      const engDensityMax = lenient ? 25 : 12;
+      if (englishHitsPer1k > engDensityMax && englishHits >= 5) {
         throw new Error(
-          `目标语言为葡萄牙语但输出残留大量英文单词（命中 ${englishHits} 个英语停用词），疑似未翻译`,
+          `目标语言为葡萄牙语但输出英文密度过高（每千字符 ${englishHitsPer1k.toFixed(1)} 个英语停用词），疑似未翻译`,
         );
       }
-      if (sample.length >= 200 && portugueseMarkers < 2) {
+      const ptMarkersMin = lenient ? 1 : 2;
+      if (sample.length >= 400 && portugueseMarkers < ptMarkersMin) {
         throw new Error(
           `目标语言为葡萄牙语但输出几乎不含葡语特征字符（á/é/í/ó/ú/ã/õ/ç 仅 ${portugueseMarkers} 个），疑似未翻译保留了英文`,
         );
       }
       break;
+    }
     case "en":
       if (latinRatio < 0.5) {
         throw new Error(`目标语言为英语但输出未以拉丁字母为主`);

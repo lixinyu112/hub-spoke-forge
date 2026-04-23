@@ -9,6 +9,7 @@ import SpokeGenerator from "@/pages/SpokeGenerator";
 import HubSynthesizer from "@/pages/HubSynthesizer";
 import BlogProcessor from "@/pages/BlogProcessor";
 import ContentBrowser from "@/pages/ContentBrowser";
+import PublishLogs from "@/pages/PublishLogs";
 import NotFound from "@/pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -26,6 +27,7 @@ const App = () => (
               <Route path="/hub-synthesizer" element={<HubSynthesizer />} />
               <Route path="/blog-processor" element={<BlogProcessor />} />
               <Route path="/browser" element={<ContentBrowser />} />
+              <Route path="/publish-logs" element={<PublishLogs />} />
               <Route path="*" element={<NotFound />} />
             </Routes>
           </DashboardLayout>

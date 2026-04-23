@@ -166,11 +166,12 @@ async function callTranslateApi(
   llmApiKey: string,
   customSystemPrompt?: string,
   attempt: number = 1,
+  lenient: boolean = false,
 ): Promise<any> {
   const langName = LANG_NAMES[targetLang] || targetLang;
 
   // 强制目标语言指令——置于最高优先级
-  const targetLangDirective = `【目标语言强制要求】\n本次翻译的目标语言是：${langName}（ISO 代码：${targetLang}）。\n输出文本必须 100% 为 ${langName}，禁止混入任何其他语言（包括但不限于日语、中文、英文等非目标语言）。\n如果你不确定某个词的 ${langName} 表达，请使用最贴近的 ${langName} 词汇，绝不能使用其他语言代替。`;
+  const targetLangDirective = `【目标语言强制要求】\n本次翻译的目标语言是：${langName}（ISO 代码：${targetLang}）。\n输出文本必须 100% 为 ${langName}，禁止混入任何其他语言（包括但不限于日语、中文、英文等非目标语言）。\n如果你不确定某个词的 ${langName} 表达，请使用最贴近的 ${langName} 词汇，绝不能使用其他语言代替。\n注意：行业通用的英文术语缩写（如 3D / AI / API / SDK / Mod 等专有名词或工具名）可保留原文，但所有自然语言句子必须翻译为 ${langName}。`;
 
   const defaultSystemPrompt = "你是一个精确的 JSON 翻译引擎，只输出翻译后的 JSON。";
 
@@ -182,14 +183,14 @@ async function callTranslateApi(
 4. 不要翻译 type、status 等枚举值
 5. 保持 JSON 结构完全不变
 6. 直接输出翻译后的 JSON，不要添加任何解释
-7. 所有翻译后的文本必须是 ${langName}，绝不能输出其他语言`;
+7. 所有自然语言句子必须翻译为 ${langName}（行业通用英文术语缩写如 3D/AI/API/Mod 可保留）`;
 
   // System prompt 始终以目标语言强制指令开头，保证最高优先级
   let systemPrompt: string;
   let userPrompt: string;
   // 重试时追加更强的提示
   const retryHint = attempt > 1
-    ? `\n\n【重试提醒】这是第 ${attempt} 次尝试。上次输出未通过 ${langName} 语言纯度校验（混入了英文或其他非目标语言），请彻底重新翻译，确保 100% 输出 ${langName}。`
+    ? `\n\n【重试提醒】这是第 ${attempt} 次尝试。上次输出未通过 ${langName} 语言纯度校验（${langName} 字符占比偏低或英文密度过高），请彻底重新翻译，确保正文 100% 输出 ${langName}。`
     : "";
   if (customSystemPrompt?.trim()) {
     systemPrompt = `${targetLangDirective}${retryHint}\n\n${customSystemPrompt.trim()}`;
@@ -226,7 +227,7 @@ async function callTranslateApi(
   const parsed = extractJsonFromResponse(content);
 
   // 语言指纹校验：确保输出语言匹配目标
-  validateLanguageFingerprint(parsed, targetLang);
+  validateLanguageFingerprint(parsed, targetLang, lenient);
 
   return parsed;
 }
@@ -236,6 +237,7 @@ const TRANSLATE_MAX_ATTEMPTS = 3;
 /**
  * 包装 callTranslateApi，对"语言指纹校验失败 / JSON 解析失败"等可恢复错误最多重试 3 次。
  * 鉴权 / 额度类错误（401、quota）不会重试，立即抛出。
+ * 策略：前两次严格校验，最后一次启用宽松校验，避免因边缘案例导致整篇发布失败。
  */
 async function callTranslateApiWithRetry(
   jsonStr: string,
@@ -244,18 +246,20 @@ async function callTranslateApiWithRetry(
   customSystemPrompt?: string,
 ): Promise<any> {
   let lastErr: unknown;
+  let lastLenientResult: any = undefined;
   for (let attempt = 1; attempt <= TRANSLATE_MAX_ATTEMPTS; attempt++) {
+    const lenient = attempt === TRANSLATE_MAX_ATTEMPTS; // 最后一次重试启用宽松校验
     try {
-      const data = await callTranslateApi(jsonStr, targetLang, llmApiKey, customSystemPrompt, attempt);
+      const data = await callTranslateApi(jsonStr, targetLang, llmApiKey, customSystemPrompt, attempt, lenient);
       if (attempt > 1) {
-        console.log(`[translate-retry] success lang=${targetLang} attempt=${attempt}`);
+        console.log(`[translate-retry] success lang=${targetLang} attempt=${attempt} lenient=${lenient}`);
       }
       return data;
     } catch (err) {
       lastErr = err;
       if (isTranslationAuthOrQuotaError(err)) throw err;
       const msg = err instanceof Error ? err.message : String(err);
-      console.warn(`[translate-retry] attempt=${attempt}/${TRANSLATE_MAX_ATTEMPTS} lang=${targetLang} failed: ${msg}`);
+      console.warn(`[translate-retry] attempt=${attempt}/${TRANSLATE_MAX_ATTEMPTS} lang=${targetLang} lenient=${lenient} failed: ${msg}`);
       if (attempt < TRANSLATE_MAX_ATTEMPTS) {
         await new Promise((r) => setTimeout(r, 400 * attempt));
       }

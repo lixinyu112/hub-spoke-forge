@@ -582,7 +582,7 @@ async function translateJson(jsonData: any, targetLang: string, customSystemProm
   return result;
 }
 
-const PUBLISH_FN_VERSION = "v9-ensure-slug-2026-04-23";
+const PUBLISH_FN_VERSION = "v10-accept-code-200-2026-04-23";
 
 // 规范化 slug：小写、字母数字 + 连字符
 function normalizeSlug(input: unknown): string {

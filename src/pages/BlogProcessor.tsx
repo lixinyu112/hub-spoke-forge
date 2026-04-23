@@ -542,12 +542,35 @@ export default function BlogProcessor() {
 
     setPublishing(false);
     setPublishProgress(null);
+    const successCount = details.filter((d) => d.success).length;
+    const failedCount = details.filter((d) => !d.success).length;
     setPublishReport({
       total,
-      success: details.filter((d) => d.success).length,
-      failed: details.filter((d) => !d.success).length,
+      success: successCount,
+      failed: failedCount,
       details,
     });
+
+    // 写入发布日志（失败不影响主流程）
+    try {
+      const group = groups.find((g) => g.id === selectedGroup);
+      await supabase.from("publish_logs").insert({
+        project_id: currentProject.id,
+        theme_id: null,
+        theme_name: group ? `Blog/${group.name}` : "Blog",
+        item_count: selectedPosts.length,
+        languages,
+        translate_enabled: true,
+        total,
+        success: successCount,
+        failed: failedCount,
+        details,
+        duration_ms: Date.now() - startedAt,
+      });
+    } catch (logErr) {
+      console.error("写入发布日志失败", logErr);
+    }
+
     await loadPosts();
   };
 
@@ -856,6 +879,10 @@ export default function BlogProcessor() {
                   )}
                 </div>
                 <div className="flex items-center gap-1.5">
+                  <Button variant="outline" size="sm" className="gap-1" onClick={() => setLogsOpen(true)}>
+                    <History className="h-3.5 w-3.5" />
+                    发布日志
+                  </Button>
                   <Button variant="outline" size="sm" className="gap-1" onClick={() => setSitemapOpen(true)}>
                     <Map className="h-3.5 w-3.5" />
                     Sitemap

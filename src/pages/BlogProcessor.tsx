@@ -532,10 +532,37 @@ export default function BlogProcessor() {
         setPublishProgress({ total, done });
       }
     } catch (e: any) {
-      // If the entire call failed, mark all as failed
-      for (const post of selectedPosts) {
-        for (const lang of languages) {
-          details.push({ item_id: post.id, item_title: post.title, language: lang, success: false, error: e.message });
+      // Try to extract response body from FunctionsHttpError (supabase-js throws on non-2xx)
+      let errMsg = e?.message || String(e);
+      try {
+        if (e?.context && typeof e.context.json === "function") {
+          const body = await e.context.json();
+          if (body?.results && Array.isArray(body.results)) {
+            for (const r of body.results) {
+              const post = selectedPosts.find((p) => p.id === r.item_id);
+              details.push({
+                item_id: r.item_id,
+                item_title: post?.title || r.item_id,
+                language: r.language,
+                success: r.success,
+                error: r.error,
+              });
+            }
+            errMsg = "";
+          } else if (body?.error) {
+            errMsg = typeof body.error === "string" ? body.error : JSON.stringify(body.error);
+          }
+        } else if (e?.context && typeof e.context.text === "function") {
+          errMsg = await e.context.text();
+        }
+      } catch {
+        // ignore extraction errors
+      }
+      if (errMsg) {
+        for (const post of selectedPosts) {
+          for (const lang of languages) {
+            details.push({ item_id: post.id, item_title: post.title, language: lang, success: false, error: errMsg });
+          }
         }
       }
     }

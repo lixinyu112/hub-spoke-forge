@@ -582,7 +582,7 @@ async function translateJson(jsonData: any, targetLang: string, customSystemProm
   return result;
 }
 
-const PUBLISH_FN_VERSION = "v9-ensure-slug-2026-04-23";
+const PUBLISH_FN_VERSION = "v10-accept-code-200-2026-04-23";
 
 // 规范化 slug：小写、字母数字 + 连字符
 function normalizeSlug(input: unknown): string {
@@ -742,8 +742,8 @@ serve(async (req) => {
               const code = parsedBody.code;
               const success = parsedBody.success;
               const errMsg = parsedBody.error || parsedBody.message || parsedBody.msg;
-              const isCodeFail = typeof code === "number" && code !== 0;
-              const isCodeStrFail = typeof code === "string" && code !== "0" && code.toLowerCase() !== "ok" && code.toLowerCase() !== "success";
+              const isCodeFail = typeof code === "number" && code !== 0 && code !== 200;
+              const isCodeStrFail = typeof code === "string" && !["0", "200", "ok", "success"].includes(code.toLowerCase());
               const isSuccessFalse = success === false;
               if (isCodeFail || isCodeStrFail || isSuccessFalse) {
                 bizError = `CMS 业务错误 code=${code ?? "?"}: ${errMsg || respText.slice(0, 300)}`;

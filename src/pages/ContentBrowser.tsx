@@ -164,11 +164,21 @@ export default function ContentBrowser() {
     try {
       const items = getSelectedData();
 
+      // 预校验：拦截 json_data 缺失或 components 为空的项，避免发布"空内容"被 CMS 静默接受
+      const isEmptyJson = (jd: any) => {
+        if (!jd || typeof jd !== "object") return true;
+        if (Array.isArray(jd.components)) return jd.components.length === 0;
+        // 没有 components 字段时，至少要有 title/description 等可发布内容
+        return Object.keys(jd).length === 0;
+      };
+      const validItems = items.filter((it) => !isEmptyJson(it.json_data));
+      const invalidItems = items.filter((it) => isEmptyJson(it.json_data));
+
       // 加载翻译 System Prompt（仅在启用翻译时使用）
       const translatePrompt = translate ? await loadPromptConfig(currentProject.id, "translate") : null;
 
-      // 1. 存储到数据库
-      const pubs = items.flatMap((item) =>
+      // 1. 存储到数据库（仅有效项）
+      const pubs = validItems.flatMap((item) =>
         languages.map((lang) => ({
           project_id: currentProject.id,
           source_type: item.type,
@@ -179,7 +189,7 @@ export default function ContentBrowser() {
           status: "published" as const,
         }))
       );
-      await createPublicationsBatch(pubs);
+      if (pubs.length > 0) await createPublicationsBatch(pubs);
 
       // 2. 分批推送外部 API，每批最多 3 个 item
       const BATCH_SIZE = 1;
@@ -187,9 +197,22 @@ export default function ContentBrowser() {
       type PublishResult = { item_id: string; item_title: string; language: string; success: boolean; error?: string };
       const allResults: PublishResult[] = [];
 
+      // 直接把无效项标记为失败
+      for (const it of invalidItems) {
+        for (const lang of languages) {
+          allResults.push({
+            item_id: it.id,
+            item_title: it.title,
+            language: lang,
+            success: false,
+            error: "内容为空：未生成 JSON 或 components 为 0，请先在生成器中产出内容",
+          });
+        }
+      }
+
       const totalTasks = items.length * languages.length;
-      setPublishProgress({ total: totalTasks, done: 0 });
-      let completedTasks = 0;
+      setPublishProgress({ total: totalTasks, done: invalidItems.length * languages.length });
+      let completedTasks = invalidItems.length * languages.length;
 
       for (let i = 0; i < items.length; i += BATCH_SIZE) {
         const batch = items.slice(i, i + BATCH_SIZE);

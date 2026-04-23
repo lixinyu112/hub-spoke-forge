@@ -416,7 +416,7 @@ serve(async (req) => {
     const failCount = results.filter((r) => !r.success).length;
     return new Response(
       JSON.stringify({ results, total: results.length, failed: failCount }),
-      { status: failCount === results.length ? 502 : 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (e) {
     return new Response(

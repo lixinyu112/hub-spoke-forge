@@ -301,10 +301,12 @@ serve(async (req) => {
       );
     }
 
-    const apiKey = Deno.env.get("BLOG_IMPORT_API_KEY");
+    const env = environment === "production" ? "production" : "staging";
+    const apiKeyEnvName = env === "production" ? "BLOG_IMPORT_API_KEY_PROD" : "BLOG_IMPORT_API_KEY";
+    const apiKey = Deno.env.get(apiKeyEnvName);
     if (!apiKey) {
       return new Response(
-        JSON.stringify({ error: "BLOG_IMPORT_API_KEY not configured" }),
+        JSON.stringify({ error: `${apiKeyEnvName} not configured` }),
         { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }

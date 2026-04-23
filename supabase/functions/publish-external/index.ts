@@ -582,39 +582,7 @@ async function translateJson(jsonData: any, targetLang: string, customSystemProm
   return result;
 }
 
-const PUBLISH_FN_VERSION = "v10-accept-code-200-2026-04-23";
-
-// 规范化 slug：小写、字母数字 + 连字符
-function normalizeSlug(input: unknown): string {
-  if (typeof input !== "string") return "";
-  return input
-    .toLowerCase()
-    .trim()
-    .replace(/[^a-z0-9\-_/]+/g, "-")
-    .replace(/-+/g, "-")
-    .replace(/^-|-$/g, "");
-}
-
-// 从多个来源解析 slug，并保证最终非空（CMS dl_hub/dl_spoke 表 slug 字段 NOT NULL）
-function resolveSlug(item: any, translatedData: any): string {
-  const candidates: unknown[] = [
-    item?.slug,
-    translatedData?.slug,
-    translatedData?.hubSlug,
-    translatedData?.metadata?.slug,
-    translatedData?.meta?.slug,
-    translatedData?.seo?.slug,
-    item?.json_data?.slug,
-    item?.json_data?.hubSlug,
-  ];
-  for (const c of candidates) {
-    const s = normalizeSlug(c);
-    if (s) return s;
-  }
-  const fromTitle = normalizeSlug(item?.title);
-  if (fromTitle) return fromTitle;
-  return `auto-${String(item?.id || "item").slice(0, 8)}`;
-}
+const PUBLISH_FN_VERSION = "v7-native-ratio-validation-2026-04-23";
 
 serve(async (req) => {
   console.log(`[publish-external] ${PUBLISH_FN_VERSION} ${req.method}`);
@@ -694,27 +662,6 @@ serve(async (req) => {
             translatedData = item.json_data;
           }
 
-          // 内容健全性检查：避免发布空 components / 空 JSON
-          const compArr = Array.isArray((translatedData as any)?.components)
-            ? (translatedData as any).components
-            : null;
-          if (!translatedData || (compArr !== null && compArr.length === 0)) {
-            results.push({
-              item_id: item.id,
-              language: lang,
-              success: false,
-              error: `内容为空（${sourceType} 无 components 或 json_data 缺失），请先生成 JSON 再发布`,
-            });
-            continue;
-          }
-
-          // 注入顶层 slug（CMS dl_hub/dl_spoke 表 slug 字段 NOT NULL，必须保证非空）
-          const finalSlug = resolveSlug(item, translatedData);
-          const payload: any = { ...(translatedData as any), slug: finalSlug };
-          // 同步 hubSlug 与 slug 一致（hub 类型）以避免下游路由冲突
-          if (sourceType === "hub" && !payload.hubSlug) payload.hubSlug = finalSlug;
-          console.log(`[publish] sending item=${item.id} type=${sourceType} lang=${lang} slug=${finalSlug}`);
-
           const resp = await fetch(url, {
             method: "POST",
             headers: {
@@ -723,39 +670,14 @@ serve(async (req) => {
               "X-Api-Timestamp": timestamp,
               "Content-Type": "application/json",
             },
-            body: JSON.stringify(payload),
+            body: JSON.stringify(translatedData),
           });
 
-          const respText = await resp.text();
           if (!resp.ok) {
-            results.push({ item_id: item.id, language: lang, success: false, error: `${resp.status}: ${respText.slice(0, 500)}` });
+            const errText = await resp.text();
+            results.push({ item_id: item.id, language: lang, success: false, error: `${resp.status}: ${errText}` });
           } else {
-            // 检查 CMS 业务层错误：HTTP 200 但 body 中 code !== 0 / success=false / 含 error 字段
-            let bizError: string | null = null;
-            let parsedBody: any = null;
-            try {
-              parsedBody = JSON.parse(respText);
-            } catch {
-              // 非 JSON 响应当作成功（少数 CMS 直接返回空体）
-            }
-            if (parsedBody && typeof parsedBody === "object") {
-              const code = parsedBody.code;
-              const success = parsedBody.success;
-              const errMsg = parsedBody.error || parsedBody.message || parsedBody.msg;
-              const isCodeFail = typeof code === "number" && code !== 0 && code !== 200;
-              const isCodeStrFail = typeof code === "string" && !["0", "200", "ok", "success"].includes(code.toLowerCase());
-              const isSuccessFalse = success === false;
-              if (isCodeFail || isCodeStrFail || isSuccessFalse) {
-                bizError = `Crescendia API 业务错误 code=${code ?? "?"}: ${errMsg || respText.slice(0, 300)}`;
-              }
-            }
-            if (bizError) {
-              console.warn(`[publish] biz-fail item=${item.id} lang=${lang} url=${url} body=${respText.slice(0, 500)}`);
-              results.push({ item_id: item.id, language: lang, success: false, error: bizError });
-            } else {
-              console.log(`[publish] success item=${item.id} lang=${lang} url=${url} bodyLen=${respText.length}`);
-              results.push({ item_id: item.id, language: lang, success: true });
-            }
+            results.push({ item_id: item.id, language: lang, success: true });
           }
         } catch (fetchErr) {
           results.push({ item_id: item.id, language: lang, success: false, error: String(fetchErr) });

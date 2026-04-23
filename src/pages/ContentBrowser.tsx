@@ -138,16 +138,16 @@ export default function ContentBrowser() {
   };
 
   const getSelectedData = () => {
-    const items: { type: "hub" | "spoke"; id: string; title: string; json_data: any }[] = [];
+    const items: { type: "hub" | "spoke"; id: string; title: string; slug: string | null; json_data: any }[] = [];
     for (const key of selectedItems) {
       const [type, id] = key.split(":");
       for (const theme of filteredTree) {
         if (type === "hub") {
           const hub = theme.hubs.find((h) => h.id === id);
-          if (hub) items.push({ type: "hub", id: hub.id, title: hub.title, json_data: hub.json_data });
+          if (hub) items.push({ type: "hub", id: hub.id, title: hub.title, slug: hub.slug, json_data: hub.json_data });
         } else {
           const spoke = [...theme.hubs.flatMap((h) => h.spokes), ...theme.unlinkedSpokes].find((s) => s.id === id);
-          if (spoke) items.push({ type: "spoke", id: spoke.id, title: spoke.title, json_data: spoke.json_data });
+          if (spoke) items.push({ type: "spoke", id: spoke.id, title: spoke.title, slug: spoke.slug, json_data: spoke.json_data });
         }
       }
     }
@@ -224,6 +224,7 @@ export default function ContentBrowser() {
                   id: item.id,
                   type: item.type,
                   title: item.title,
+                  slug: item.slug,
                   json_data: item.json_data,
                 })),
                 languages: [lang],
@@ -265,7 +266,7 @@ export default function ContentBrowser() {
             const retryItems = failedGroup.map((f) => {
               // 仅重试 validItems 中的项，跳过预校验失败的空内容项
               const item = validItems.find((it) => it.id === f.item_id);
-              return item ? { id: item.id, type: item.type, title: item.title, json_data: item.json_data } : null;
+              return item ? { id: item.id, type: item.type, title: item.title, slug: item.slug, json_data: item.json_data } : null;
             }).filter(Boolean);
 
             if (retryItems.length === 0) continue;

@@ -582,7 +582,39 @@ async function translateJson(jsonData: any, targetLang: string, customSystemProm
   return result;
 }
 
-const PUBLISH_FN_VERSION = "v8-cms-body-inspect-2026-04-23";
+const PUBLISH_FN_VERSION = "v9-ensure-slug-2026-04-23";
+
+// 规范化 slug：小写、字母数字 + 连字符
+function normalizeSlug(input: unknown): string {
+  if (typeof input !== "string") return "";
+  return input
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9\-_/]+/g, "-")
+    .replace(/-+/g, "-")
+    .replace(/^-|-$/g, "");
+}
+
+// 从多个来源解析 slug，并保证最终非空（CMS dl_hub/dl_spoke 表 slug 字段 NOT NULL）
+function resolveSlug(item: any, translatedData: any): string {
+  const candidates: unknown[] = [
+    item?.slug,
+    translatedData?.slug,
+    translatedData?.hubSlug,
+    translatedData?.metadata?.slug,
+    translatedData?.meta?.slug,
+    translatedData?.seo?.slug,
+    item?.json_data?.slug,
+    item?.json_data?.hubSlug,
+  ];
+  for (const c of candidates) {
+    const s = normalizeSlug(c);
+    if (s) return s;
+  }
+  const fromTitle = normalizeSlug(item?.title);
+  if (fromTitle) return fromTitle;
+  return `auto-${String(item?.id || "item").slice(0, 8)}`;
+}
 
 serve(async (req) => {
   console.log(`[publish-external] ${PUBLISH_FN_VERSION} ${req.method}`);
@@ -676,6 +708,13 @@ serve(async (req) => {
             continue;
           }
 
+          // 注入顶层 slug（CMS dl_hub/dl_spoke 表 slug 字段 NOT NULL，必须保证非空）
+          const finalSlug = resolveSlug(item, translatedData);
+          const payload: any = { ...(translatedData as any), slug: finalSlug };
+          // 同步 hubSlug 与 slug 一致（hub 类型）以避免下游路由冲突
+          if (sourceType === "hub" && !payload.hubSlug) payload.hubSlug = finalSlug;
+          console.log(`[publish] sending item=${item.id} type=${sourceType} lang=${lang} slug=${finalSlug}`);
+
           const resp = await fetch(url, {
             method: "POST",
             headers: {
@@ -684,7 +723,7 @@ serve(async (req) => {
               "X-Api-Timestamp": timestamp,
               "Content-Type": "application/json",
             },
-            body: JSON.stringify(translatedData),
+            body: JSON.stringify(payload),
           });
 
           const respText = await resp.text();

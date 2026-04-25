@@ -477,102 +477,150 @@ export default function BlogProcessor() {
       // Load translate prompt once
       const translatePrompt = await loadPromptConfig(currentProject.id, "translate");
 
-      // 分片调用：每个 (语言, 单篇文章) 一次请求，避免 Edge Function 网关超时（~150s）。
-      // 单篇文章的多次 LLM 翻译串行通常 < 60s，安全余量大。
-      const CHUNK_SIZE = 1; // 每个请求处理的文章数
-      const MAX_RETRIES = 2; // 网络/超时重试次数
+      // 新版双阶段流水线：
+      //   1) translate-blog：单文章×单语言并行翻译（耗时大头，但每个请求 < 60s）
+      //   2) publish-blog-cms：批量推送到 CMS（毫秒级）
+      // 这样彻底避免把"多语言 × N 文章"的翻译串在一次 150s 网关请求里超时。
+      const TRANSLATE_CONCURRENCY = 4; // 同时进行的翻译请求数
+      const MAX_RETRIES = 2;
 
-      const invokeOnce = async (chunkPosts: typeof selectedPosts, lang: string) => {
-        const requestBody = {
-          items: chunkPosts.map((p) => ({
-            id: p.id,
-            title: p.title,
-            slug: p.slug,
-            json_data: p.json_data,
-          })),
-          languages: [lang],
-          translate_prompt: translatePrompt || undefined,
-          slug_prefix: "crescendia",
-          environment,
-        };
-
+      const invokeWithRetry = async (fn: string, body: any) => {
         let lastErr: any = null;
         for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
           try {
-            const { data, error } = await supabase.functions.invoke("publish-blog", {
-              body: requestBody,
-            });
+            const { data, error } = await supabase.functions.invoke(fn, { body });
             if (error) {
-              // 尝试解析错误响应体，若包含 results 则视为业务级失败，无需重试
               try {
                 if (error?.context && typeof error.context.json === "function") {
-                  const body = await error.context.json();
-                  if (body?.results && Array.isArray(body.results)) {
-                    return body.results;
-                  }
+                  const eb = await error.context.json();
+                  if (eb?.results || eb?.articles) return eb;
                 }
               } catch { /* ignore */ }
               throw error;
             }
-            return data?.results || [];
+            return data;
           } catch (err: any) {
             lastErr = err;
             const msg = err?.message || String(err);
             const transient = /Failed to send|Failed to fetch|network|timeout|503|504|aborted/i.test(msg);
             if (!transient || attempt === MAX_RETRIES) break;
-            // 指数退避
             await new Promise((r) => setTimeout(r, 1500 * (attempt + 1)));
-            console.warn(`[publish-blog] retry ${attempt + 1}/${MAX_RETRIES} for ${lang}:`, msg);
+            console.warn(`[${fn}] retry ${attempt + 1}/${MAX_RETRIES}:`, msg);
           }
         }
         throw lastErr;
       };
 
       let done = 0;
-      for (const lang of languages) {
-        for (let i = 0; i < selectedPosts.length; i += CHUNK_SIZE) {
-          const chunk = selectedPosts.slice(i, i + CHUNK_SIZE);
-          let chunkResults: any[] = [];
+      const recordResult = async (r: any, fallbackLang: string) => {
+        const post = selectedPosts.find((p) => p.id === r.item_id);
+        details.push({
+          item_id: r.item_id,
+          item_title: post?.title || r.item_id,
+          language: r.language || fallbackLang,
+          success: !!r.success,
+          error: r.error,
+        });
+        if (r.success && post) {
           try {
-            chunkResults = await invokeOnce(chunk, lang);
+            await createPublication({
+              project_id: currentProject.id,
+              source_type: "blog",
+              source_id: r.item_id,
+              title: post.title,
+              language: r.language || fallbackLang,
+              json_data: post.json_data,
+              status: "published",
+            });
+            await updateBlogPost(r.item_id, { status: "published" });
+          } catch (persistErr) {
+            console.error("写入 publication 失败", persistErr);
+          }
+        }
+        done++;
+        setPublishProgress({ total, done });
+      };
+
+      for (const lang of languages) {
+        // —— 阶段 1：并行翻译 ——
+        type TR = { item_id: string; articles: any[]; error?: string };
+        const translateOne = async (post: typeof selectedPosts[number]): Promise<TR> => {
+          try {
+            const data = await invokeWithRetry("translate-blog", {
+              item: { id: post.id, title: post.title, slug: post.slug, json_data: post.json_data },
+              language: lang,
+              translate_prompt: translatePrompt || undefined,
+            });
+            return { item_id: post.id, articles: data?.articles || [] };
           } catch (err: any) {
-            const errMsg = err?.message || String(err);
-            console.error(`[publish-blog] chunk failed (lang=${lang}):`, errMsg);
-            // 整个分片失败 → 标记该分片所有项失败
-            for (const p of chunk) {
-              chunkResults.push({ item_id: p.id, language: lang, success: false, error: errMsg });
+            return { item_id: post.id, articles: [], error: err?.message || String(err) };
+          }
+        };
+
+        const translated: TR[] = [];
+        for (let i = 0; i < selectedPosts.length; i += TRANSLATE_CONCURRENCY) {
+          const slice = selectedPosts.slice(i, i + TRANSLATE_CONCURRENCY);
+          const part = await Promise.all(slice.map(translateOne));
+          translated.push(...part);
+        }
+
+        // 翻译失败的直接记录失败，不参与推送
+        const okEntries: { item_id: string; articles: any[] }[] = [];
+        for (const t of translated) {
+          if (t.error || t.articles.length === 0) {
+            await recordResult(
+              { item_id: t.item_id, language: lang, success: false, error: t.error || "翻译返回空" },
+              lang,
+            );
+          } else {
+            okEntries.push({ item_id: t.item_id, articles: t.articles });
+          }
+        }
+
+        if (okEntries.length === 0) continue;
+
+        // —— 阶段 2：批量推送 CMS（最多 50 篇/请求，函数内部会再分批） ——
+        const PUSH_BATCH = 20; // 客户端批次：避免单次 payload 过大
+        for (let i = 0; i < okEntries.length; i += PUSH_BATCH) {
+          const batch = okEntries.slice(i, i + PUSH_BATCH);
+          let pushResults: any[] = [];
+          try {
+            const data = await invokeWithRetry("publish-blog-cms", {
+              entries: batch,
+              language: lang,
+              slug_prefix: "crescendia",
+              environment,
+            });
+            pushResults = data?.results || [];
+          } catch (err: any) {
+            const msg = err?.message || String(err);
+            for (const e of batch) {
+              pushResults.push({ item_id: e.item_id, language: lang, success: false, error: msg });
             }
           }
 
-          for (const r of chunkResults) {
-            const post = chunk.find((p) => p.id === r.item_id) || selectedPosts.find((p) => p.id === r.item_id);
-            details.push({
-              item_id: r.item_id,
-              item_title: post?.title || r.item_id,
-              language: r.language || lang,
-              success: !!r.success,
-              error: r.error,
-            });
-
-            if (r.success && post) {
-              try {
-                await createPublication({
-                  project_id: currentProject.id,
-                  source_type: "blog",
-                  source_id: r.item_id,
-                  title: post.title,
-                  language: r.language || lang,
-                  json_data: post.json_data,
-                  status: "published",
-                });
-                await updateBlogPost(r.item_id, { status: "published" });
-              } catch (persistErr) {
-                console.error("写入 publication 失败", persistErr);
-              }
+          // CMS 可能为同一 item 返回多条结果（多文章），聚合为单条结果给 UI
+          const grouped = new Map<string, { success: boolean; errors: string[]; cms: any[] }>();
+          for (const r of pushResults) {
+            const g = grouped.get(r.item_id) || { success: true, errors: [], cms: [] };
+            if (!r.success) {
+              g.success = false;
+              if (r.error) g.errors.push(r.error);
             }
-
-            done++;
-            setPublishProgress({ total, done });
+            if (r.cms_results) g.cms.push(...r.cms_results);
+            grouped.set(r.item_id, g);
+          }
+          for (const e of batch) {
+            const g = grouped.get(e.item_id) || { success: false, errors: ["无 CMS 返回"], cms: [] };
+            await recordResult(
+              {
+                item_id: e.item_id,
+                language: lang,
+                success: g.success,
+                error: g.success ? undefined : g.errors.join("; "),
+              },
+              lang,
+            );
           }
         }
       }

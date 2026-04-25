@@ -691,6 +691,7 @@ export default function ContentBrowser() {
         onPublish={handlePublish}
         report={publishReport}
         progress={publishProgress}
+        onRetryFailed={handleRetryFailed}
       />
 
       {currentProject && selectedThemeId && (() => {
@@ -709,6 +710,8 @@ export default function ContentBrowser() {
         open={logsDialogOpen}
         onOpenChange={setLogsDialogOpen}
         projectId={currentProject?.id || null}
+        source="content"
+        onRetry={handleRetryFromLog}
       />
     </div>
   );

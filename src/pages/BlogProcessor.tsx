@@ -947,7 +947,7 @@ export default function BlogProcessor() {
           </Card>
 
           {/* Upload area */}
-          <Card>
+          <Card className="shrink-0">
             <CardHeader className="pb-3">
               <CardTitle className="text-base">上传与转换</CardTitle>
             </CardHeader>

@@ -600,16 +600,15 @@ export default function BlogProcessor() {
           }
 
           // CMS 可能为同一 item 返回多条结果（多文章），聚合为单条结果给 UI
-          type GroupedResult = { success: boolean; errors: string[]; cms: any[] };
-          const grouped: Map<string, GroupedResult> = new Map();
+          const grouped: Record<string, { success: boolean; errors: string[]; cms: any[] }> = {};
           for (const r of pushResults) {
-            const g = grouped.get(r.item_id) || { success: true, errors: [], cms: [] };
+            const g = grouped[r.item_id] || { success: true, errors: [], cms: [] };
             if (!r.success) {
               g.success = false;
               if (r.error) g.errors.push(r.error);
             }
             if (r.cms_results) g.cms.push(...r.cms_results);
-            grouped.set(r.item_id, g);
+            grouped[r.item_id] = g;
           }
           for (const e of batch) {
             const g = grouped.get(e.item_id) || { success: false, errors: ["无 CMS 返回"], cms: [] };

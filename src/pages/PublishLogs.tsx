@@ -305,6 +305,7 @@ export default function PublishLogs() {
           )}
         </CardContent>
       </Card>
+      </div>
     </div>
   );
 }

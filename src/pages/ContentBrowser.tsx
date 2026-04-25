@@ -50,6 +50,8 @@ export default function ContentBrowser() {
   const [editThemeNameError, setEditThemeNameError] = useState("");
   const [sitemapDialogOpen, setSitemapDialogOpen] = useState(false);
   const [logsDialogOpen, setLogsDialogOpen] = useState(false);
+  const [lastPublishedItems, setLastPublishedItems] = useState<{ type: "hub" | "spoke"; id: string; title: string; json_data: any }[]>([]);
+  const [lastTranslate, setLastTranslate] = useState<boolean>(true);
 
   // Load saved prompt
   useEffect(() => {
@@ -180,6 +182,8 @@ export default function ContentBrowser() {
         }))
       );
       await createPublicationsBatch(pubs);
+      setLastPublishedItems(items);
+      setLastTranslate(translate);
 
       // 2. 分批推送外部 API，每批最多 3 个 item
       const BATCH_SIZE = 1;
@@ -309,6 +313,122 @@ export default function ContentBrowser() {
     }
     setPublishing(false);
     setPublishProgress(null);
+  };
+
+  // Retry only failed (item, language) pairs from a report
+  const handleRetryFailed = async (failed: PublishReportData["details"]) => {
+    if (!currentProject || failed.length === 0) return;
+    setPublishing(true);
+    const startedAt = Date.now();
+    const translatePrompt = lastTranslate ? await loadPromptConfig(currentProject.id, "translate") : null;
+
+    // Self-heal: serial 1-by-1, longer cooldown when transient errors detected
+    const errs = failed.map((d) => (d.error || "").toLowerCase()).join("\n");
+    const cooldownMs = /429|queue|rate.?limit/.test(errs) ? 1800 : 1000;
+    const skipTranslate = /翻译返回空|parse|invalid json|unexpected token/i.test(errs);
+    const effectiveTranslate = lastTranslate && !skipTranslate;
+
+    const candidates = lastPublishedItems.length > 0 ? lastPublishedItems : getSelectedData();
+    const newResults: PublishReportData["details"] = [];
+    const totalRetry = failed.length;
+    setPublishProgress({ total: totalRetry, done: 0 });
+    let retried = 0;
+
+    for (const f of failed) {
+      const item = candidates.find((c) => c.id === f.item_id);
+      if (!item) {
+        newResults.push({ ...f, error: "[无法重试] 找不到原始内容" });
+        retried++;
+        setPublishProgress({ total: totalRetry, done: retried });
+        continue;
+      }
+      try {
+        const { data: extResult, error: extError } = await supabase.functions.invoke("publish-external", {
+          body: {
+            items: [{ id: item.id, type: item.type, title: item.title, json_data: item.json_data }],
+            languages: [f.language],
+            translate: effectiveTranslate,
+            translate_prompt: translatePrompt || undefined,
+          },
+        });
+        if (extError) {
+          newResults.push({ item_id: item.id, item_title: item.title, language: f.language, success: false, error: extError.message });
+        } else if (extResult?.results?.[0]) {
+          const r = extResult.results[0];
+          newResults.push({ item_id: r.item_id, item_title: item.title, language: r.language, success: !!r.success, error: r.error });
+        } else {
+          newResults.push({ item_id: item.id, item_title: item.title, language: f.language, success: false, error: "无返回" });
+        }
+      } catch (err: any) {
+        newResults.push({ item_id: item.id, item_title: item.title, language: f.language, success: false, error: String(err) });
+      }
+      retried++;
+      setPublishProgress({ total: totalRetry, done: retried });
+      await new Promise((r) => setTimeout(r, cooldownMs));
+    }
+
+    // Merge with current report
+    const prev = publishReport?.details || [];
+    const failedKey = new Set(failed.map((d) => `${d.item_id}::${d.language}`));
+    const kept = prev.filter((d) => !failedKey.has(`${d.item_id}::${d.language}`));
+    const merged = [...kept, ...newResults];
+    setPublishReport({
+      total: merged.length,
+      success: merged.filter((d) => d.success).length,
+      failed: merged.filter((d) => !d.success).length,
+      details: merged,
+    });
+
+    // Write retry log
+    try {
+      const currentTheme = allThemes.find((t) => t.id === selectedThemeId);
+      const langs = Array.from(new Set(failed.map((d) => d.language)));
+      await supabase.from("publish_logs").insert({
+        project_id: currentProject.id,
+        theme_id: selectedThemeId || null,
+        theme_name: currentTheme ? `${currentTheme.name} 重试` : "重试",
+        item_count: new Set(failed.map((d) => d.item_id)).size,
+        languages: langs,
+        translate_enabled: effectiveTranslate,
+        total: newResults.length,
+        success: newResults.filter((d) => d.success).length,
+        failed: newResults.filter((d) => !d.success).length,
+        details: newResults,
+        duration_ms: Date.now() - startedAt,
+      });
+    } catch { /* ignore */ }
+
+    toast({
+      title: `重试完成（${skipTranslate ? "跳过翻译" : "标准"}）`,
+      description: `成功 ${newResults.filter((d) => d.success).length} / ${newResults.length}`,
+    });
+    setPublishing(false);
+    setPublishProgress(null);
+  };
+
+  const handleRetryFromLog = async (log: PublishLogRow) => {
+    const failed = (log.details || []).filter((d) => !d.success);
+    if (failed.length === 0) {
+      toast({ title: "该日志无失败项" });
+      return;
+    }
+    // Hydrate items from current loaded tree if last items unset
+    if (lastPublishedItems.length === 0) {
+      const map = new Map<string, { type: "hub" | "spoke"; id: string; title: string; json_data: any }>();
+      for (const theme of allThemes) {
+        for (const hub of theme.hubs) {
+          map.set(hub.id, { type: "hub", id: hub.id, title: hub.title, json_data: hub.json_data });
+          for (const spoke of hub.spokes) map.set(spoke.id, { type: "spoke", id: spoke.id, title: spoke.title, json_data: spoke.json_data });
+        }
+        for (const spoke of theme.unlinkedSpokes) map.set(spoke.id, { type: "spoke", id: spoke.id, title: spoke.title, json_data: spoke.json_data });
+      }
+      const items = failed.map((f) => map.get(f.item_id)).filter(Boolean) as { type: "hub" | "spoke"; id: string; title: string; json_data: any }[];
+      setLastPublishedItems(items);
+    }
+    setLastTranslate(log.translate_enabled);
+    setPublishDialogOpen(true);
+    setPublishReport({ total: log.total, success: log.success, failed: log.failed, details: log.details });
+    await handleRetryFailed(failed);
   };
 
   const validateThemeName = (name: string) => {

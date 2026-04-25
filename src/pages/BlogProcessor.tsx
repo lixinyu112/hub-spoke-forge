@@ -600,7 +600,8 @@ export default function BlogProcessor() {
           }
 
           // CMS 可能为同一 item 返回多条结果（多文章），聚合为单条结果给 UI
-          const grouped = new Map<string, { success: boolean; errors: string[]; cms: any[] }>();
+          type GroupedResult = { success: boolean; errors: string[]; cms: any[] };
+          const grouped: Map<string, GroupedResult> = new Map();
           for (const r of pushResults) {
             const g = grouped.get(r.item_id) || { success: true, errors: [], cms: [] };
             if (!r.success) {

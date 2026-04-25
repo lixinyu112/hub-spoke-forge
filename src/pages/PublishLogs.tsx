@@ -95,7 +95,8 @@ export default function PublishLogs() {
   const totalFailed = filteredLogs.reduce((acc, l) => acc + (l.failed || 0), 0);
 
   return (
-    <div className="container max-w-6xl mx-auto py-6 space-y-4">
+    <div className="h-full overflow-auto">
+      <div className="container max-w-6xl mx-auto py-6 space-y-4">
       <div className="flex items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-semibold flex items-center gap-2">

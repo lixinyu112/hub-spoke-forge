@@ -1386,7 +1386,7 @@ export default function BlogProcessor() {
                     发布日志
                   </Button>
                   <Button variant="outline" size="sm" className="gap-1" onClick={() => setSitemapOpen(true)}>
-                    <Map className="h-3.5 w-3.5" />
+                    <MapIcon className="h-3.5 w-3.5" />
                     Sitemap
                   </Button>
                   {selectedPostIds.size > 0 && (

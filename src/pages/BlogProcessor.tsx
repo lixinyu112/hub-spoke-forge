@@ -905,9 +905,9 @@ export default function BlogProcessor() {
 
       <div className="flex-1 grid lg:grid-cols-2 gap-4 min-h-0">
         {/* Left panel: Upload & Posts list */}
-        <div className="flex flex-col gap-4 overflow-auto">
+        <div className="flex flex-col gap-4 min-h-0">
           {/* Group management - prominent */}
-          <Card className="border-primary/30 bg-primary/5">
+          <Card className="border-primary/30 bg-primary/5 shrink-0">
             <CardHeader className="pb-2">
               <div className="flex items-center justify-between">
                 <CardTitle className="text-base flex items-center gap-2">
@@ -947,7 +947,7 @@ export default function BlogProcessor() {
           </Card>
 
           {/* Upload area */}
-          <Card>
+          <Card className="shrink-0">
             <CardHeader className="pb-3">
               <CardTitle className="text-base">上传与转换</CardTitle>
             </CardHeader>
@@ -1177,7 +1177,7 @@ export default function BlogProcessor() {
                 </div>
               ) : (
                 <ScrollArea className="h-full">
-                  <div className="space-y-1">
+                  <div className="space-y-1 pr-3">
                     {filteredPosts.map((post) => renderPostItem(post))}
                     {filteredPosts.length === 0 && (
                       <p className="text-sm text-muted-foreground text-center py-4">该分组下暂无 Blog 内容</p>

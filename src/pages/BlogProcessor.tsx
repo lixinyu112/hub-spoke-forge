@@ -477,90 +477,110 @@ export default function BlogProcessor() {
       // Load translate prompt once
       const translatePrompt = await loadPromptConfig(currentProject.id, "translate");
 
-      // Call publish-blog edge function which handles translation + CMS push
-      const requestBody = {
-        items: selectedPosts.map((p) => ({
-          id: p.id,
-          title: p.title,
-          slug: p.slug,
-          json_data: p.json_data,
-        })),
-        languages,
-        translate_prompt: translatePrompt || undefined,
-        slug_prefix: "crescendia",
-        environment,
-      };
-      console.log("[publish-blog] Request Body:", JSON.stringify(requestBody, null, 2));
+      // 分片调用：每个 (语言, 单篇文章) 一次请求，避免 Edge Function 网关超时（~150s）。
+      // 单篇文章的多次 LLM 翻译串行通常 < 60s，安全余量大。
+      const CHUNK_SIZE = 1; // 每个请求处理的文章数
+      const MAX_RETRIES = 2; // 网络/超时重试次数
 
-      const { data, error } = await supabase.functions.invoke("publish-blog", {
-        body: requestBody,
-      });
+      const invokeOnce = async (chunkPosts: typeof selectedPosts, lang: string) => {
+        const requestBody = {
+          items: chunkPosts.map((p) => ({
+            id: p.id,
+            title: p.title,
+            slug: p.slug,
+            json_data: p.json_data,
+          })),
+          languages: [lang],
+          translate_prompt: translatePrompt || undefined,
+          slug_prefix: "crescendia",
+          environment,
+        };
 
-      console.log("[publish-blog] Response Headers:", data ? "OK" : "Error");
-      console.log("[publish-blog] Response Body:", JSON.stringify(data, null, 2));
-
-      if (error) throw error;
-
-      const results = data?.results || [];
-      let done = 0;
-
-      for (const r of results) {
-        const post = selectedPosts.find((p) => p.id === r.item_id);
-        details.push({
-          item_id: r.item_id,
-          item_title: post?.title || r.item_id,
-          language: r.language,
-          success: r.success,
-          error: r.error,
-        });
-
-        // Save publication record for successful items
-        if (r.success && post) {
-          await createPublication({
-            project_id: currentProject.id,
-            source_type: "blog",
-            source_id: r.item_id,
-            title: post.title,
-            language: r.language,
-            json_data: post.json_data,
-            status: "published",
-          });
-          await updateBlogPost(r.item_id, { status: "published" });
+        let lastErr: any = null;
+        for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+          try {
+            const { data, error } = await supabase.functions.invoke("publish-blog", {
+              body: requestBody,
+            });
+            if (error) {
+              // 尝试解析错误响应体，若包含 results 则视为业务级失败，无需重试
+              try {
+                if (error?.context && typeof error.context.json === "function") {
+                  const body = await error.context.json();
+                  if (body?.results && Array.isArray(body.results)) {
+                    return body.results;
+                  }
+                }
+              } catch { /* ignore */ }
+              throw error;
+            }
+            return data?.results || [];
+          } catch (err: any) {
+            lastErr = err;
+            const msg = err?.message || String(err);
+            const transient = /Failed to send|Failed to fetch|network|timeout|503|504|aborted/i.test(msg);
+            if (!transient || attempt === MAX_RETRIES) break;
+            // 指数退避
+            await new Promise((r) => setTimeout(r, 1500 * (attempt + 1)));
+            console.warn(`[publish-blog] retry ${attempt + 1}/${MAX_RETRIES} for ${lang}:`, msg);
+          }
         }
+        throw lastErr;
+      };
 
-        done++;
-        setPublishProgress({ total, done });
+      let done = 0;
+      for (const lang of languages) {
+        for (let i = 0; i < selectedPosts.length; i += CHUNK_SIZE) {
+          const chunk = selectedPosts.slice(i, i + CHUNK_SIZE);
+          let chunkResults: any[] = [];
+          try {
+            chunkResults = await invokeOnce(chunk, lang);
+          } catch (err: any) {
+            const errMsg = err?.message || String(err);
+            console.error(`[publish-blog] chunk failed (lang=${lang}):`, errMsg);
+            // 整个分片失败 → 标记该分片所有项失败
+            for (const p of chunk) {
+              chunkResults.push({ item_id: p.id, language: lang, success: false, error: errMsg });
+            }
+          }
+
+          for (const r of chunkResults) {
+            const post = chunk.find((p) => p.id === r.item_id) || selectedPosts.find((p) => p.id === r.item_id);
+            details.push({
+              item_id: r.item_id,
+              item_title: post?.title || r.item_id,
+              language: r.language || lang,
+              success: !!r.success,
+              error: r.error,
+            });
+
+            if (r.success && post) {
+              try {
+                await createPublication({
+                  project_id: currentProject.id,
+                  source_type: "blog",
+                  source_id: r.item_id,
+                  title: post.title,
+                  language: r.language || lang,
+                  json_data: post.json_data,
+                  status: "published",
+                });
+                await updateBlogPost(r.item_id, { status: "published" });
+              } catch (persistErr) {
+                console.error("写入 publication 失败", persistErr);
+              }
+            }
+
+            done++;
+            setPublishProgress({ total, done });
+          }
+        }
       }
     } catch (e: any) {
-      // Try to extract response body from FunctionsHttpError (supabase-js throws on non-2xx)
-      let errMsg = e?.message || String(e);
-      try {
-        if (e?.context && typeof e.context.json === "function") {
-          const body = await e.context.json();
-          if (body?.results && Array.isArray(body.results)) {
-            for (const r of body.results) {
-              const post = selectedPosts.find((p) => p.id === r.item_id);
-              details.push({
-                item_id: r.item_id,
-                item_title: post?.title || r.item_id,
-                language: r.language,
-                success: r.success,
-                error: r.error,
-              });
-            }
-            errMsg = "";
-          } else if (body?.error) {
-            errMsg = typeof body.error === "string" ? body.error : JSON.stringify(body.error);
-          }
-        } else if (e?.context && typeof e.context.text === "function") {
-          errMsg = await e.context.text();
-        }
-      } catch {
-        // ignore extraction errors
-      }
-      if (errMsg) {
-        for (const post of selectedPosts) {
-          for (const lang of languages) {
+      const errMsg = e?.message || String(e);
+      for (const post of selectedPosts) {
+        for (const lang of languages) {
+          if (!details.find((d) => d.item_id === post.id && d.language === lang)) {
             details.push({ item_id: post.id, item_title: post.title, language: lang, success: false, error: errMsg });
           }
         }

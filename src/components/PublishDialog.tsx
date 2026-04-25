@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Globe, Loader2, CheckCircle2, XCircle } from "lucide-react";
+import { Globe, Loader2, CheckCircle2, XCircle, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -39,9 +39,11 @@ interface PublishDialogProps {
   allLanguages?: boolean;
   /** Show translate toggle (default true) */
   showTranslateToggle?: boolean;
+  /** Optional handler invoked when user clicks "自动修正并重试" on the failure report. */
+  onRetryFailed?: (failedDetails: PublishReportData["details"]) => void | Promise<void>;
 }
 
-export function PublishDialog({ open, onOpenChange, selectedCount, publishing, onPublish, report, progress, showEnvironment = false, allLanguages = false, showTranslateToggle = true }: PublishDialogProps) {
+export function PublishDialog({ open, onOpenChange, selectedCount, publishing, onPublish, report, progress, showEnvironment = false, allLanguages = false, showTranslateToggle = true, onRetryFailed }: PublishDialogProps) {
   const ALL_LANG_CODES = LANGUAGES.map((l) => l.code);
   const [selectedLangs, setSelectedLangs] = useState<Set<string>>(new Set(allLanguages ? ALL_LANG_CODES : ["zh"]));
   const [environment, setEnvironment] = useState<string>("staging");
@@ -92,7 +94,21 @@ export function PublishDialog({ open, onOpenChange, selectedCount, publishing, o
 
             {failedItems.length > 0 && (
               <div>
-                <Label className="text-sm font-medium mb-2 block">失败明细</Label>
+                <div className="flex items-center justify-between mb-2">
+                  <Label className="text-sm font-medium">失败明细</Label>
+                  {onRetryFailed && (
+                    <Button
+                      size="sm"
+                      variant="secondary"
+                      className="h-7 gap-1.5"
+                      disabled={publishing}
+                      onClick={() => onRetryFailed(failedItems)}
+                    >
+                      {publishing ? <Loader2 className="h-3 w-3 animate-spin" /> : <RefreshCw className="h-3 w-3" />}
+                      自动修正并重试 ({failedItems.length})
+                    </Button>
+                  )}
+                </div>
                 <ScrollArea className="h-[200px] rounded-md border">
                   <div className="p-2 space-y-1">
                     {failedItems.map((item, i) => (
@@ -109,6 +125,9 @@ export function PublishDialog({ open, onOpenChange, selectedCount, publishing, o
                     ))}
                   </div>
                 </ScrollArea>
+                <p className="text-[11px] text-muted-foreground mt-1.5">
+                  重试会自动按错误类型选择修正策略（限流冷却 / 跳过翻译兜底 / 串行降速），仅重发以上失败项。
+                </p>
               </div>
             )}
 
@@ -119,8 +138,22 @@ export function PublishDialog({ open, onOpenChange, selectedCount, publishing, o
               </div>
             )}
           </div>
-          <DialogFooter>
-            <Button onClick={() => onOpenChange(false)}>关闭</Button>
+          <DialogFooter className="flex-col gap-2 sm:flex-row sm:justify-end">
+            {publishing && progress && (
+              <div className="w-full sm:w-auto sm:flex-1 space-y-1.5">
+                <div className="flex items-center gap-3">
+                  <div className="flex-1 h-2 bg-muted rounded-full overflow-hidden">
+                    <div
+                      className="h-full bg-primary rounded-full transition-all duration-500"
+                      style={{ width: `${progress.total > 0 ? (progress.done / progress.total) * 100 : 0}%` }}
+                    />
+                  </div>
+                  <span className="text-xs font-mono text-muted-foreground shrink-0">{progress.done}/{progress.total}</span>
+                </div>
+                <p className="text-[11px] text-muted-foreground text-center">正在重试…</p>
+              </div>
+            )}
+            <Button onClick={() => onOpenChange(false)} disabled={publishing}>关闭</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

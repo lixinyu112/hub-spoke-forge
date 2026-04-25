@@ -611,7 +611,7 @@ export default function BlogProcessor() {
             grouped[r.item_id] = g;
           }
           for (const e of batch) {
-            const g = grouped.get(e.item_id) || { success: false, errors: ["无 CMS 返回"], cms: [] };
+            const g = grouped[e.item_id] || { success: false, errors: ["无 CMS 返回"], cms: [] };
             await recordResult(
               {
                 item_id: e.item_id,

@@ -460,8 +460,391 @@ export default function BlogProcessor() {
     });
   };
 
+  // ==========================================================================
+  // Publish pipeline (shared by initial publish + retry).
+  // 自我修正策略 (selfHeal): 根据失败错误模式自动调整：
+  //  - 含 429/queue → cooldown 加倍
+  //  - 含 timeout / non-2xx / 5xx → 串行 + 更高重试上限
+  //  - 含 "翻译返回空" / JSON parse → 跳过翻译，按原文 fallback 推送
+  // ==========================================================================
+  type PublishTask = { post: BlogPost; language: string };
+  type SelfHealMode = "default" | "cooldown" | "serial" | "no-translate";
+
+  const detectSelfHealMode = (failed: PublishReportData["details"]): SelfHealMode => {
+    const errs = failed.map((d) => (d.error || "").toLowerCase()).join("\n");
+    if (/翻译返回空|parse|invalid json|unexpected token/i.test(errs)) return "no-translate";
+    if (/429|queue|rate.?limit/i.test(errs)) return "cooldown";
+    if (/timeout|non-2xx|aborted|500|502|503|504|failed to send|failed to fetch|network/i.test(errs))
+      return "serial";
+    return "default";
+  };
+
+  const runPublishPipeline = async (
+    tasks: PublishTask[],
+    environment: string,
+    mode: SelfHealMode,
+  ): Promise<PublishReportData["details"]> => {
+    const details: PublishReportData["details"] = [];
+    if (!currentProject || tasks.length === 0) return details;
+
+    // Strategy parameters
+    const TRANSLATE_CONCURRENCY = mode === "serial" ? 1 : 1; // 始终串行翻译
+    const MAX_RETRIES = mode === "serial" ? 4 : 3;
+    const REQUEST_COOLDOWN_MS = mode === "cooldown" ? 1800 : mode === "serial" ? 1200 : 700;
+    const skipTranslate = mode === "no-translate";
+
+    const total = tasks.length;
+    setPublishProgress({ total, done: 0 });
+
+    // Group tasks by language so we can reuse phase-2 batching
+    const tasksByLang = new Map<string, BlogPost[]>();
+    for (const t of tasks) {
+      const arr = tasksByLang.get(t.language) || [];
+      arr.push(t.post);
+      tasksByLang.set(t.language, arr);
+    }
+
+    const translatePrompt = await loadPromptConfig(currentProject.id, "translate");
+
+    const readFunctionError = async (fn: string, error: any) => {
+      const status = error?.context?.status;
+      let detail = error?.message || String(error);
+      try {
+        const raw = await error.context?.clone?.().text?.();
+        if (raw) {
+          try {
+            const parsed = JSON.parse(raw);
+            detail = parsed?.error || parsed?.message || raw;
+          } catch {
+            detail = raw;
+          }
+        }
+      } catch { /* ignore */ }
+      return `${fn}${status ? ` ${status}` : ""}: ${detail}`;
+    };
+
+    const invokeWithRetry = async (fn: string, body: any) => {
+      let lastErr: any = null;
+      for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+        try {
+          const { data, error } = await supabase.functions.invoke(fn, { body });
+          if (error) {
+            try {
+              if (error?.context && typeof error.context.json === "function") {
+                const eb = await error.context.json();
+                if (eb?.results || eb?.articles) return eb;
+              }
+            } catch { /* ignore */ }
+            throw new Error(await readFunctionError(fn, error));
+          }
+          return data;
+        } catch (err: any) {
+          lastErr = err;
+          const msg = err?.message || String(err);
+          const transient = /Failed to send|Failed to fetch|network|timeout|429|500|502|503|504|non-2xx|aborted|queue/i.test(msg);
+          if (!transient || attempt === MAX_RETRIES) break;
+          const base = mode === "serial" ? 2400 : 1800;
+          await new Promise((r) => setTimeout(r, base * (attempt + 1) + Math.floor(Math.random() * 500)));
+          console.warn(`[${fn}] retry ${attempt + 1}/${MAX_RETRIES}:`, msg);
+        }
+      }
+      throw lastErr;
+    };
+
+    let done = 0;
+    const recordResult = async (r: any, fallbackLang: string, postRef?: BlogPost) => {
+      const post = postRef || tasks.find((t) => t.post.id === r.item_id)?.post;
+      details.push({
+        item_id: r.item_id,
+        item_title: post?.title || r.item_id,
+        language: r.language || fallbackLang,
+        success: !!r.success,
+        error: r.error,
+      });
+      if (r.success && post) {
+        try {
+          await createPublication({
+            project_id: currentProject.id,
+            source_type: "blog",
+            source_id: r.item_id,
+            title: post.title,
+            language: r.language || fallbackLang,
+            json_data: post.json_data,
+            status: "published",
+          });
+          await updateBlogPost(r.item_id, { status: "published" });
+        } catch (persistErr) {
+          console.error("写入 publication 失败", persistErr);
+        }
+      }
+      done++;
+      setPublishProgress({ total, done });
+    };
+
+    // Build a fallback "raw" article for no-translate mode
+    const rawArticles = (post: BlogPost) => {
+      const data: any = post.json_data || {};
+      if (Array.isArray(data.articles) && data.articles.length > 0) {
+        return data.articles.map((a: any) => {
+          const article = { ...a };
+          if (Array.isArray(article.keywords)) {
+            article.keywords = article.keywords.map((k: any) =>
+              typeof k === "string" ? { keyword: k } : k,
+            );
+          }
+          return article;
+        });
+      }
+      const fields = extractArticleFields(post);
+      return [{
+        ...fields,
+        keywords: fields.keywords?.map((k) => ({ keyword: k })),
+      }];
+    };
+
+    for (const [lang, postsForLang] of tasksByLang) {
+      // —— Phase 1: translate (or skip) ——
+      type TR = { item_id: string; articles: any[]; error?: string };
+      const translated: TR[] = [];
+
+      for (let i = 0; i < postsForLang.length; i += TRANSLATE_CONCURRENCY) {
+        const slice = postsForLang.slice(i, i + TRANSLATE_CONCURRENCY);
+        const part = await Promise.all(
+          slice.map(async (post): Promise<TR> => {
+            if (skipTranslate) {
+              return { item_id: post.id, articles: rawArticles(post) };
+            }
+            try {
+              const data = await invokeWithRetry("translate-blog", {
+                item: { id: post.id, title: post.title, slug: post.slug, json_data: post.json_data },
+                language: lang,
+                translate_prompt: translatePrompt || undefined,
+              });
+              const articles = data?.articles || [];
+              if (articles.length === 0) {
+                // fallback: ship raw rather than fail outright
+                return { item_id: post.id, articles: rawArticles(post), error: undefined };
+              }
+              return { item_id: post.id, articles };
+            } catch (err: any) {
+              return { item_id: post.id, articles: [], error: err?.message || String(err) };
+            }
+          }),
+        );
+        translated.push(...part);
+        if (i + TRANSLATE_CONCURRENCY < postsForLang.length) {
+          await new Promise((r) => setTimeout(r, REQUEST_COOLDOWN_MS));
+        }
+      }
+
+      const okEntries: { item_id: string; articles: any[]; post: BlogPost }[] = [];
+      for (const t of translated) {
+        const post = postsForLang.find((p) => p.id === t.item_id)!;
+        if (t.error || t.articles.length === 0) {
+          await recordResult(
+            { item_id: t.item_id, language: lang, success: false, error: t.error || "翻译返回空" },
+            lang,
+            post,
+          );
+        } else {
+          okEntries.push({ item_id: t.item_id, articles: t.articles, post });
+        }
+      }
+
+      if (okEntries.length === 0) continue;
+
+      // —— Phase 2: push CMS ——
+      const PUSH_BATCH = mode === "serial" ? 5 : 20;
+      for (let i = 0; i < okEntries.length; i += PUSH_BATCH) {
+        const batch = okEntries.slice(i, i + PUSH_BATCH);
+        let pushResults: any[] = [];
+        try {
+          const data = await invokeWithRetry("publish-blog-cms", {
+            entries: batch.map((b) => ({ item_id: b.item_id, articles: b.articles })),
+            language: lang,
+            slug_prefix: "crescendia",
+            environment,
+          });
+          pushResults = data?.results || [];
+        } catch (err: any) {
+          const msg = err?.message || String(err);
+          for (const e of batch) {
+            pushResults.push({ item_id: e.item_id, language: lang, success: false, error: msg });
+          }
+        }
+
+        const grouped: Record<string, { success: boolean; errors: string[] }> = {};
+        for (const r of pushResults) {
+          const g = grouped[r.item_id] || { success: true, errors: [] };
+          if (!r.success) {
+            g.success = false;
+            if (r.error) g.errors.push(r.error);
+          }
+          grouped[r.item_id] = g;
+        }
+        for (const e of batch) {
+          const g = grouped[e.item_id] || { success: false, errors: ["无 CMS 返回"] };
+          await recordResult(
+            {
+              item_id: e.item_id,
+              language: lang,
+              success: g.success,
+              error: g.success ? undefined : g.errors.join("; "),
+            },
+            lang,
+            e.post,
+          );
+        }
+        if (i + PUSH_BATCH < okEntries.length) {
+          await new Promise((r) => setTimeout(r, REQUEST_COOLDOWN_MS));
+        }
+      }
+    }
+    return details;
+  };
+
+  const writePublishLog = async (
+    label: string,
+    itemCount: number,
+    languages: string[],
+    details: PublishReportData["details"],
+    durationMs: number,
+  ) => {
+    if (!currentProject) return;
+    try {
+      await supabase.from("publish_logs").insert({
+        project_id: currentProject.id,
+        theme_id: null,
+        theme_name: label,
+        item_count: itemCount,
+        languages,
+        translate_enabled: true,
+        total: details.length,
+        success: details.filter((d) => d.success).length,
+        failed: details.filter((d) => !d.success).length,
+        details,
+        duration_ms: durationMs,
+      });
+    } catch (logErr) {
+      console.error("写入发布日志失败", logErr);
+    }
+  };
+
   // Publish via Blog Import API
   const handlePublish = async (languages: string[], environment: string, _translate: boolean) => {
+    if (!currentProject || selectedPostIds.size === 0) return;
+    setPublishing(true);
+    setPublishReport(null);
+    const startedAt = Date.now();
+
+    const selectedPosts = posts.filter((p) => selectedPostIds.has(p.id) && p.json_data && !p.json_data.error);
+    const tasks: PublishTask[] = [];
+    for (const post of selectedPosts) {
+      for (const lang of languages) tasks.push({ post, language: lang });
+    }
+
+    let details: PublishReportData["details"] = [];
+    try {
+      details = await runPublishPipeline(tasks, environment, "default");
+    } catch (e: any) {
+      const errMsg = e?.message || String(e);
+      for (const t of tasks) {
+        if (!details.find((d) => d.item_id === t.post.id && d.language === t.language)) {
+          details.push({ item_id: t.post.id, item_title: t.post.title, language: t.language, success: false, error: errMsg });
+        }
+      }
+    }
+
+    setPublishing(false);
+    setPublishProgress(null);
+    setPublishReport({
+      total: tasks.length,
+      success: details.filter((d) => d.success).length,
+      failed: details.filter((d) => !d.success).length,
+      details,
+    });
+
+    const group = groups.find((g) => g.id === selectedGroup);
+    await writePublishLog(group ? `Blog/${group.name}` : "Blog", selectedPosts.length, languages, details, Date.now() - startedAt);
+    await loadPosts();
+    setSelectedPostsForRetry(selectedPosts);
+    setLastEnvironment(environment);
+  };
+
+  // Track posts referenced by current report so retries can find their json_data
+  const [selectedPostsForRetry, setSelectedPostsForRetry] = useState<BlogPost[]>([]);
+  const [lastEnvironment, setLastEnvironment] = useState<string>("staging");
+
+  // Retry only the failed (item, language) pairs with self-healing strategy
+  const handleRetryFailed = async (failed: PublishReportData["details"]) => {
+    if (!currentProject || failed.length === 0) return;
+    const mode = detectSelfHealMode(failed);
+    setPublishing(true);
+    const startedAt = Date.now();
+
+    // Collect candidate posts from currently-loaded sources
+    const candidatePool = [...selectedPostsForRetry, ...allPosts, ...posts];
+    const tasks: PublishTask[] = [];
+    const missing: PublishReportData["details"] = [];
+    for (const f of failed) {
+      const post = candidatePool.find((p) => p.id === f.item_id);
+      if (post && post.json_data && !post.json_data.error) {
+        tasks.push({ post, language: f.language });
+      } else {
+        missing.push({ ...f, error: `[无法重试] 找不到原始 Blog 内容（可能已删除）` });
+      }
+    }
+
+    let retryDetails: PublishReportData["details"] = [];
+    try {
+      retryDetails = await runPublishPipeline(tasks, lastEnvironment, mode);
+    } catch (e: any) {
+      const errMsg = e?.message || String(e);
+      for (const t of tasks) {
+        if (!retryDetails.find((d) => d.item_id === t.post.id && d.language === t.language)) {
+          retryDetails.push({ item_id: t.post.id, item_title: t.post.title, language: t.language, success: false, error: errMsg });
+        }
+      }
+    }
+
+    // Merge: previous report - failed + new retry results (+ missing)
+    const prev = publishReport?.details || [];
+    const failedKey = new Set(failed.map((d) => `${d.item_id}::${d.language}`));
+    const kept = prev.filter((d) => !failedKey.has(`${d.item_id}::${d.language}`));
+    const merged = [...kept, ...retryDetails, ...missing];
+
+    setPublishing(false);
+    setPublishProgress(null);
+    setPublishReport({
+      total: merged.length,
+      success: merged.filter((d) => d.success).length,
+      failed: merged.filter((d) => !d.success).length,
+      details: merged,
+    });
+
+    const langs = Array.from(new Set(failed.map((d) => d.language)));
+    const itemIds = new Set(failed.map((d) => d.item_id));
+    await writePublishLog(`Blog 重试 (${mode})`, itemIds.size, langs, [...retryDetails, ...missing], Date.now() - startedAt);
+
+    toast({
+      title: `重试完成（策略: ${mode}）`,
+      description: `成功 ${retryDetails.filter((d) => d.success).length} / ${retryDetails.length}，仍失败 ${retryDetails.filter((d) => !d.success).length + missing.length}`,
+    });
+    await loadPosts();
+  };
+
+  // Retry an entire publish_logs row (called from PublishLogsDialog)
+  const handleRetryFromLog = async (log: { details: PublishReportData["details"] }) => {
+    const failed = (log.details || []).filter((d) => !d.success);
+    if (failed.length === 0) {
+      toast({ title: "该日志无失败项", variant: "default" });
+      return;
+    }
+    await handleRetryFailed(failed);
+  };
+
+  // === legacy publish handler removed below; keep for diff continuity ===
+  const _legacyHandlePublish_unused = async (languages: string[], environment: string, _translate: boolean) => {
     if (!currentProject || selectedPostIds.size === 0) return;
     setPublishing(true);
     setPublishReport(null);

@@ -580,6 +580,9 @@ export default function BlogProcessor() {
           const slice = selectedPosts.slice(i, i + TRANSLATE_CONCURRENCY);
           const part = await Promise.all(slice.map(translateOne));
           translated.push(...part);
+          if (i + TRANSLATE_CONCURRENCY < selectedPosts.length) {
+            await new Promise((r) => setTimeout(r, REQUEST_COOLDOWN_MS));
+          }
         }
 
         // 翻译失败的直接记录失败，不参与推送
@@ -639,6 +642,9 @@ export default function BlogProcessor() {
               },
               lang,
             );
+          }
+          if (i + PUSH_BATCH < okEntries.length) {
+            await new Promise((r) => setTimeout(r, REQUEST_COOLDOWN_MS));
           }
         }
       }

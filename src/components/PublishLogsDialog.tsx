@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { History, RefreshCw, CheckCircle2, XCircle, Globe, ChevronDown, ChevronRight } from "lucide-react";
+import { History, RefreshCw, CheckCircle2, XCircle, Globe, ChevronDown, ChevronRight, Loader2, RotateCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
@@ -7,7 +7,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { supabase } from "@/integrations/supabase/client";
 import { Skeleton } from "@/components/ui/skeleton";
 
-interface PublishLogRow {
+export interface PublishLogRow {
   id: string;
   theme_name: string | null;
   item_count: number;
@@ -25,6 +25,10 @@ interface PublishLogsDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   projectId: string | null;
+  /** Source filter: "blog" only shows Blog/* logs, "content" hides Blog/* logs. Defaults to all. */
+  source?: "blog" | "content";
+  /** Optional retry handler — when provided, each failed log row gets a "重试失败项" button. */
+  onRetry?: (log: PublishLogRow) => Promise<void> | void;
 }
 
 function formatDuration(ms: number | null) {
@@ -43,10 +47,11 @@ function formatDate(iso: string) {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
 }
 
-export function PublishLogsDialog({ open, onOpenChange, projectId }: PublishLogsDialogProps) {
+export function PublishLogsDialog({ open, onOpenChange, projectId, source, onRetry }: PublishLogsDialogProps) {
   const [loading, setLoading] = useState(false);
   const [logs, setLogs] = useState<PublishLogRow[]>([]);
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
+  const [retryingId, setRetryingId] = useState<string | null>(null);
 
   const load = async () => {
     if (!projectId) return;
@@ -58,13 +63,18 @@ export function PublishLogsDialog({ open, onOpenChange, projectId }: PublishLogs
       .order("created_at", { ascending: false })
       .limit(100);
     if (!error && data) {
-      setLogs(
-        data.map((d: any) => ({
-          ...d,
-          languages: Array.isArray(d.languages) ? d.languages : [],
-          details: Array.isArray(d.details) ? d.details : [],
-        })),
-      );
+      const rows: PublishLogRow[] = data.map((d: any) => ({
+        ...d,
+        languages: Array.isArray(d.languages) ? d.languages : [],
+        details: Array.isArray(d.details) ? d.details : [],
+      }));
+      const filtered = source
+        ? rows.filter((r) => {
+            const isBlog = (r.theme_name || "").startsWith("Blog");
+            return source === "blog" ? isBlog : !isBlog;
+          })
+        : rows;
+      setLogs(filtered);
     }
     setLoading(false);
   };
@@ -74,7 +84,18 @@ export function PublishLogsDialog({ open, onOpenChange, projectId }: PublishLogs
       setExpanded(new Set());
       load();
     }
-  }, [open, projectId]);
+  }, [open, projectId, source]);
+
+  const handleRetryClick = async (log: PublishLogRow) => {
+    if (!onRetry) return;
+    setRetryingId(log.id);
+    try {
+      await onRetry(log);
+      await load();
+    } finally {
+      setRetryingId(null);
+    }
+  };
 
   const toggle = (id: string) => {
     setExpanded((prev) => {
@@ -192,7 +213,25 @@ export function PublishLogsDialog({ open, onOpenChange, projectId }: PublishLogs
                           <>
                             {failedDetails.length > 0 && (
                               <div className="space-y-1">
-                                <p className="text-[11px] font-medium text-destructive">失败明细 ({failedDetails.length})</p>
+                                <div className="flex items-center justify-between">
+                                  <p className="text-[11px] font-medium text-destructive">失败明细 ({failedDetails.length})</p>
+                                  {onRetry && (
+                                    <Button
+                                      size="sm"
+                                      variant="secondary"
+                                      className="h-6 gap-1.5 text-[11px] px-2"
+                                      disabled={retryingId === log.id}
+                                      onClick={(e) => { e.stopPropagation(); handleRetryClick(log); }}
+                                    >
+                                      {retryingId === log.id ? (
+                                        <Loader2 className="h-3 w-3 animate-spin" />
+                                      ) : (
+                                        <RotateCw className="h-3 w-3" />
+                                      )}
+                                      自动修正并重试
+                                    </Button>
+                                  )}
+                                </div>
                                 {failedDetails.map((d, i) => (
                                   <div key={i} className="flex items-start gap-2 p-1.5 rounded bg-destructive/5 text-[11px]">
                                     <XCircle className="h-3 w-3 text-destructive shrink-0 mt-0.5" />

@@ -18,7 +18,7 @@ import { PromptConfigButton } from "@/components/PromptConfigButton";
 import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from "@/components/ui/resizable";
 import { loadPromptConfig, savePromptConfig } from "@/lib/promptConfig";
 import { SitemapDialog } from "@/components/SitemapDialog";
-import { PublishLogsDialog } from "@/components/PublishLogsDialog";
+import { PublishLogsDialog, type PublishLogRow } from "@/components/PublishLogsDialog";
 
 const THEME_NAME_REGEX = /^[a-z0-9][a-z0-9\-]*$/;
 

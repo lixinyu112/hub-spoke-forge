@@ -481,8 +481,26 @@ export default function BlogProcessor() {
       //   1) translate-blog：单文章×单语言并行翻译（耗时大头，但每个请求 < 60s）
       //   2) publish-blog-cms：批量推送到 CMS（毫秒级）
       // 这样彻底避免把"多语言 × N 文章"的翻译串在一次 150s 网关请求里超时。
-      const TRANSLATE_CONCURRENCY = 4; // 同时进行的翻译请求数
-      const MAX_RETRIES = 2;
+      const TRANSLATE_CONCURRENCY = 1; // 稳定优先：串行翻译，避免 28 篇并发触发函数排队/429/超时
+      const MAX_RETRIES = 3;
+      const REQUEST_COOLDOWN_MS = 700;
+
+      const readFunctionError = async (fn: string, error: any) => {
+        const status = error?.context?.status;
+        let detail = error?.message || String(error);
+        try {
+          const raw = await error.context?.clone?.().text?.();
+          if (raw) {
+            try {
+              const parsed = JSON.parse(raw);
+              detail = parsed?.error || parsed?.message || raw;
+            } catch {
+              detail = raw;
+            }
+          }
+        } catch { /* ignore */ }
+        return `${fn}${status ? ` ${status}` : ""}: ${detail}`;
+      };
 
       const invokeWithRetry = async (fn: string, body: any) => {
         let lastErr: any = null;
@@ -496,15 +514,15 @@ export default function BlogProcessor() {
                   if (eb?.results || eb?.articles) return eb;
                 }
               } catch { /* ignore */ }
-              throw error;
+              throw new Error(await readFunctionError(fn, error));
             }
             return data;
           } catch (err: any) {
             lastErr = err;
             const msg = err?.message || String(err);
-            const transient = /Failed to send|Failed to fetch|network|timeout|503|504|aborted/i.test(msg);
+            const transient = /Failed to send|Failed to fetch|network|timeout|429|500|502|503|504|non-2xx|aborted|queue/i.test(msg);
             if (!transient || attempt === MAX_RETRIES) break;
-            await new Promise((r) => setTimeout(r, 1500 * (attempt + 1)));
+            await new Promise((r) => setTimeout(r, 1800 * (attempt + 1) + Math.floor(Math.random() * 500)));
             console.warn(`[${fn}] retry ${attempt + 1}/${MAX_RETRIES}:`, msg);
           }
         }

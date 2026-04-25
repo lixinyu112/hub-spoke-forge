@@ -905,9 +905,9 @@ export default function BlogProcessor() {
 
       <div className="flex-1 grid lg:grid-cols-2 gap-4 min-h-0">
         {/* Left panel: Upload & Posts list */}
-        <div className="flex flex-col gap-4 overflow-auto">
+        <div className="flex flex-col gap-4 min-h-0">
           {/* Group management - prominent */}
-          <Card className="border-primary/30 bg-primary/5">
+          <Card className="border-primary/30 bg-primary/5 shrink-0">
             <CardHeader className="pb-2">
               <div className="flex items-center justify-between">
                 <CardTitle className="text-base flex items-center gap-2">

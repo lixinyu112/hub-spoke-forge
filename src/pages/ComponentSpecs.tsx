@@ -254,6 +254,7 @@ export default function ComponentSpecs() {
         <Save className="h-4 w-4" />
         保存规范
       </Button>
+      </div>
     </div>
   );
 }

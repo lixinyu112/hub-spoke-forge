@@ -1177,7 +1177,7 @@ export default function BlogProcessor() {
                 </div>
               ) : (
                 <ScrollArea className="h-full">
-                  <div className="space-y-1">
+                  <div className="space-y-1 pr-3">
                     {filteredPosts.map((post) => renderPostItem(post))}
                     {filteredPosts.length === 0 && (
                       <p className="text-sm text-muted-foreground text-center py-4">该分组下暂无 Blog 内容</p>

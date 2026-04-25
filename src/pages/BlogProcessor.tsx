@@ -1341,6 +1341,7 @@ export default function BlogProcessor() {
         showEnvironment
         allLanguages
         showTranslateToggle={false}
+        onRetryFailed={handleRetryFailed}
       />
 
       {/* Blog Sitemap dialog */}
@@ -1356,6 +1357,8 @@ export default function BlogProcessor() {
         open={logsOpen}
         onOpenChange={setLogsOpen}
         projectId={currentProject?.id || null}
+        source="blog"
+        onRetry={handleRetryFromLog}
       />
     </div>
   );

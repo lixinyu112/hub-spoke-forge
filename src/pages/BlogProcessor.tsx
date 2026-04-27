@@ -669,7 +669,7 @@ export default function BlogProcessor() {
                 item: { id: post.id, title: post.title, slug: post.slug, json_data: post.json_data },
                 language: lang,
                 translate_prompt: translatePrompt || undefined,
-              });
+              }, { itemIds: [post.id], language: lang });
               const articles = data?.articles || [];
               if (articles.length === 0) {
                 // fallback: ship raw rather than fail outright

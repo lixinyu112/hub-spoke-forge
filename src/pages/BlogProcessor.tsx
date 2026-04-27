@@ -714,7 +714,7 @@ export default function BlogProcessor() {
             language: lang,
             slug_prefix: "crescendia",
             environment,
-          });
+          }, { itemIds: batch.map((b) => b.item_id), language: lang });
           pushResults = data?.results || [];
         } catch (err: any) {
           const msg = err?.message || String(err);

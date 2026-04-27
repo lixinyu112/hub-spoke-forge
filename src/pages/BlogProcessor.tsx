@@ -13,7 +13,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { CodeViewer } from "@/components/CodeViewer";
 import { ValidationBar } from "@/components/ValidationBar";
 import { PromptConfigButton } from "@/components/PromptConfigButton";
-import { PublishDialog, PublishReportData } from "@/components/PublishDialog";
+import { PublishDialog, PublishReportData, PublishEndpointCall } from "@/components/PublishDialog";
 import { useProject } from "@/contexts/ProjectContext";
 import {
   getBlogGroups, createBlogGroup, deleteBlogGroup,

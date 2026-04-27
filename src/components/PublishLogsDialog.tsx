@@ -7,6 +7,17 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { supabase } from "@/integrations/supabase/client";
 import { Skeleton } from "@/components/ui/skeleton";
 
+export interface PublishLogEndpoint {
+  fn: string;
+  url: string;
+  method: "POST" | "GET";
+  request_summary?: string;
+  status?: number;
+  ok: boolean;
+  response_summary?: string;
+  duration_ms?: number;
+}
+
 export interface PublishLogRow {
   id: string;
   theme_name: string | null;
@@ -16,7 +27,14 @@ export interface PublishLogRow {
   total: number;
   success: number;
   failed: number;
-  details: { item_id: string; item_title: string; language: string; success: boolean; error?: string }[];
+  details: {
+    item_id: string;
+    item_title: string;
+    language: string;
+    success: boolean;
+    error?: string;
+    endpoints?: PublishLogEndpoint[];
+  }[];
   duration_ms: number | null;
   created_at: string;
 }
@@ -239,6 +257,7 @@ export function PublishLogsDialog({ open, onOpenChange, projectId, source, onRet
                                       <p className="font-medium truncate">{d.item_title}</p>
                                       <p className="text-muted-foreground">语言: <span className="font-mono">{d.language}</span></p>
                                       {d.error && <p className="text-destructive/80 break-all mt-0.5">{d.error}</p>}
+                                      <EndpointList endpoints={d.endpoints} />
                                     </div>
                                   </div>
                                 ))}
@@ -246,16 +265,19 @@ export function PublishLogsDialog({ open, onOpenChange, projectId, source, onRet
                             )}
                             <details className="text-[11px]">
                               <summary className="cursor-pointer text-muted-foreground hover:text-foreground py-1">完整明细 ({log.details.length})</summary>
-                              <div className="space-y-0.5 mt-1 max-h-60 overflow-auto">
+                              <div className="space-y-0.5 mt-1 max-h-80 overflow-auto">
                                 {log.details.map((d, i) => (
-                                  <div key={i} className="flex items-center gap-2 px-1.5 py-1 rounded hover:bg-muted/40">
-                                    {d.success ? (
-                                      <CheckCircle2 className="h-3 w-3 text-success shrink-0" />
-                                    ) : (
-                                      <XCircle className="h-3 w-3 text-destructive shrink-0" />
-                                    )}
-                                    <span className="font-mono text-muted-foreground w-7">{d.language}</span>
-                                    <span className="truncate flex-1">{d.item_title}</span>
+                                  <div key={i} className="px-1.5 py-1 rounded hover:bg-muted/40">
+                                    <div className="flex items-center gap-2">
+                                      {d.success ? (
+                                        <CheckCircle2 className="h-3 w-3 text-success shrink-0" />
+                                      ) : (
+                                        <XCircle className="h-3 w-3 text-destructive shrink-0" />
+                                      )}
+                                      <span className="font-mono text-muted-foreground w-7">{d.language}</span>
+                                      <span className="truncate flex-1">{d.item_title}</span>
+                                    </div>
+                                    <EndpointList endpoints={d.endpoints} />
                                   </div>
                                 ))}
                               </div>
@@ -272,5 +294,50 @@ export function PublishLogsDialog({ open, onOpenChange, projectId, source, onRet
         </ScrollArea>
       </DialogContent>
     </Dialog>
+  );
+}
+
+// ---- Endpoint detail renderer ----
+function EndpointList({ endpoints }: { endpoints?: PublishLogEndpoint[] }) {
+  if (!endpoints || endpoints.length === 0) return null;
+  return (
+    <div className="mt-1 space-y-1 pl-5">
+      {endpoints.map((ep, i) => (
+        <div
+          key={i}
+          className={`rounded border px-1.5 py-1 text-[10px] font-mono ${
+            ep.ok ? "border-success/30 bg-success/5" : "border-destructive/30 bg-destructive/5"
+          }`}
+        >
+          <div className="flex items-center gap-1.5 flex-wrap">
+            <Badge variant={ep.ok ? "secondary" : "destructive"} className="h-4 px-1 text-[9px]">
+              {ep.fn}
+            </Badge>
+            <span className="text-muted-foreground">{ep.method}</span>
+            <span className={ep.ok ? "text-success" : "text-destructive"}>
+              {ep.status ?? "—"}
+            </span>
+            {typeof ep.duration_ms === "number" && (
+              <span className="text-muted-foreground">{ep.duration_ms}ms</span>
+            )}
+            <span className="truncate text-muted-foreground" title={ep.url}>{ep.url}</span>
+          </div>
+          {ep.request_summary && (
+            <details className="mt-0.5">
+              <summary className="cursor-pointer text-muted-foreground hover:text-foreground">请求体</summary>
+              <pre className="whitespace-pre-wrap break-all bg-background/60 p-1 rounded mt-0.5 max-h-32 overflow-auto">{ep.request_summary}</pre>
+            </details>
+          )}
+          {ep.response_summary && (
+            <details className="mt-0.5">
+              <summary className="cursor-pointer text-muted-foreground hover:text-foreground">
+                {ep.ok ? "响应" : "错误"}
+              </summary>
+              <pre className="whitespace-pre-wrap break-all bg-background/60 p-1 rounded mt-0.5 max-h-32 overflow-auto">{ep.response_summary}</pre>
+            </details>
+          )}
+        </div>
+      ))}
+    </div>
   );
 }

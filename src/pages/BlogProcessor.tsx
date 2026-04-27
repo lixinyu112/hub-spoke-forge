@@ -13,7 +13,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { CodeViewer } from "@/components/CodeViewer";
 import { ValidationBar } from "@/components/ValidationBar";
 import { PromptConfigButton } from "@/components/PromptConfigButton";
-import { PublishDialog, PublishReportData } from "@/components/PublishDialog";
+import { PublishDialog, PublishReportData, PublishEndpointCall } from "@/components/PublishDialog";
 import { useProject } from "@/contexts/ProjectContext";
 import {
   getBlogGroups, createBlogGroup, deleteBlogGroup,
@@ -487,8 +487,28 @@ export default function BlogProcessor() {
     const details: PublishReportData["details"] = [];
     if (!currentProject || tasks.length === 0) return details;
 
+    // Per-task endpoint call collector: key = `${item_id}::${language}`
+    const endpointsByTask = new Map<string, PublishEndpointCall[]>();
+    const pushEndpoint = (itemIds: string[], language: string, call: PublishEndpointCall) => {
+      for (const id of itemIds) {
+        const key = `${id}::${language}`;
+        const arr = endpointsByTask.get(key) || [];
+        arr.push(call);
+        endpointsByTask.set(key, arr);
+      }
+    };
+    const summarize = (val: any, max = 400): string => {
+      try {
+        const s = typeof val === "string" ? val : JSON.stringify(val);
+        return s.length > max ? s.slice(0, max) + `… (${s.length} chars)` : s;
+      } catch {
+        return String(val);
+      }
+    };
+    const FN_BASE_URL = `https://${import.meta.env.VITE_SUPABASE_PROJECT_ID}.supabase.co/functions/v1`;
+
     // Strategy parameters
-    const TRANSLATE_CONCURRENCY = mode === "serial" ? 1 : 1; // 始终串行翻译
+    const TRANSLATE_CONCURRENCY = mode === "serial" ? 1 : 1;
     const MAX_RETRIES = mode === "serial" ? 4 : 3;
     const REQUEST_COOLDOWN_MS = mode === "cooldown" ? 1800 : mode === "serial" ? 1200 : 700;
     const skipTranslate = mode === "no-translate";
@@ -496,7 +516,6 @@ export default function BlogProcessor() {
     const total = tasks.length;
     setPublishProgress({ total, done: 0 });
 
-    // Group tasks by language so we can reuse phase-2 batching
     const tasksByLang = new Map<string, BlogPost[]>();
     for (const t of tasks) {
       const arr = tasksByLang.get(t.language) || [];
@@ -523,20 +542,49 @@ export default function BlogProcessor() {
       return `${fn}${status ? ` ${status}` : ""}: ${detail}`;
     };
 
-    const invokeWithRetry = async (fn: string, body: any) => {
+    const invokeWithRetry = async (
+      fn: string,
+      body: any,
+      track?: { itemIds: string[]; language: string },
+    ) => {
       let lastErr: any = null;
       for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+        const startedAt = Date.now();
         try {
           const { data, error } = await supabase.functions.invoke(fn, { body });
           if (error) {
             try {
               if (error?.context && typeof error.context.json === "function") {
                 const eb = await error.context.json();
-                if (eb?.results || eb?.articles) return eb;
+                if (eb?.results || eb?.articles) {
+                  if (track) pushEndpoint(track.itemIds, track.language, {
+                    fn, url: `${FN_BASE_URL}/${fn}`, method: "POST",
+                    request_summary: summarize(body),
+                    status: error?.context?.status, ok: true,
+                    response_summary: summarize(eb),
+                    duration_ms: Date.now() - startedAt,
+                  });
+                  return eb;
+                }
               }
             } catch { /* ignore */ }
-            throw new Error(await readFunctionError(fn, error));
+            const errMsg = await readFunctionError(fn, error);
+            if (track) pushEndpoint(track.itemIds, track.language, {
+              fn, url: `${FN_BASE_URL}/${fn}`, method: "POST",
+              request_summary: summarize(body),
+              status: error?.context?.status, ok: false,
+              response_summary: summarize(errMsg),
+              duration_ms: Date.now() - startedAt,
+            });
+            throw new Error(errMsg);
           }
+          if (track) pushEndpoint(track.itemIds, track.language, {
+            fn, url: `${FN_BASE_URL}/${fn}`, method: "POST",
+            request_summary: summarize(body),
+            status: 200, ok: true,
+            response_summary: summarize(data),
+            duration_ms: Date.now() - startedAt,
+          });
           return data;
         } catch (err: any) {
           lastErr = err;
@@ -554,12 +602,14 @@ export default function BlogProcessor() {
     let done = 0;
     const recordResult = async (r: any, fallbackLang: string, postRef?: BlogPost) => {
       const post = postRef || tasks.find((t) => t.post.id === r.item_id)?.post;
+      const lang = r.language || fallbackLang;
       details.push({
         item_id: r.item_id,
         item_title: post?.title || r.item_id,
-        language: r.language || fallbackLang,
+        language: lang,
         success: !!r.success,
         error: r.error,
+        endpoints: endpointsByTask.get(`${r.item_id}::${lang}`) || [],
       });
       if (r.success && post) {
         try {
@@ -568,7 +618,7 @@ export default function BlogProcessor() {
             source_type: "blog",
             source_id: r.item_id,
             title: post.title,
-            language: r.language || fallbackLang,
+            language: lang,
             json_data: post.json_data,
             status: "published",
           });
@@ -619,7 +669,7 @@ export default function BlogProcessor() {
                 item: { id: post.id, title: post.title, slug: post.slug, json_data: post.json_data },
                 language: lang,
                 translate_prompt: translatePrompt || undefined,
-              });
+              }, { itemIds: [post.id], language: lang });
               const articles = data?.articles || [];
               if (articles.length === 0) {
                 // fallback: ship raw rather than fail outright
@@ -664,7 +714,7 @@ export default function BlogProcessor() {
             language: lang,
             slug_prefix: "crescendia",
             environment,
-          });
+          }, { itemIds: batch.map((b) => b.item_id), language: lang });
           pushResults = data?.results || [];
         } catch (err: any) {
           const msg = err?.message || String(err);

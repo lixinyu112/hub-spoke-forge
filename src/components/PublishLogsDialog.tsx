@@ -7,6 +7,17 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { supabase } from "@/integrations/supabase/client";
 import { Skeleton } from "@/components/ui/skeleton";
 
+export interface PublishLogEndpoint {
+  fn: string;
+  url: string;
+  method: "POST" | "GET";
+  request_summary?: string;
+  status?: number;
+  ok: boolean;
+  response_summary?: string;
+  duration_ms?: number;
+}
+
 export interface PublishLogRow {
   id: string;
   theme_name: string | null;
@@ -16,7 +27,14 @@ export interface PublishLogRow {
   total: number;
   success: number;
   failed: number;
-  details: { item_id: string; item_title: string; language: string; success: boolean; error?: string }[];
+  details: {
+    item_id: string;
+    item_title: string;
+    language: string;
+    success: boolean;
+    error?: string;
+    endpoints?: PublishLogEndpoint[];
+  }[];
   duration_ms: number | null;
   created_at: string;
 }

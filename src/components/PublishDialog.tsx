@@ -23,7 +23,32 @@ export interface PublishReportData {
   total: number;
   success: number;
   failed: number;
-  details: { item_id: string; item_title: string; language: string; success: boolean; error?: string }[];
+  details: {
+    item_id: string;
+    item_title: string;
+    language: string;
+    success: boolean;
+    error?: string;
+    endpoints?: PublishEndpointCall[];
+  }[];
+}
+
+export interface PublishEndpointCall {
+  /** 接口标签：translate-blog / publish-blog-cms */
+  fn: string;
+  /** 实际请求的 URL（edge function 完整 URL） */
+  url: string;
+  method: "POST" | "GET";
+  /** 请求体摘要（截断） */
+  request_summary?: string;
+  /** HTTP 状态码（成功 200 / 失败 4xx-5xx） */
+  status?: number;
+  /** 是否成功 */
+  ok: boolean;
+  /** 响应/错误摘要（截断） */
+  response_summary?: string;
+  /** 耗时 ms */
+  duration_ms?: number;
 }
 
 interface PublishDialogProps {

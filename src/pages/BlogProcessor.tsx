@@ -944,18 +944,19 @@ export default function BlogProcessor() {
   );
 
   return (
-    <div className="p-6 h-full flex flex-col gap-4">
-      <div>
-        <div className="flex items-center gap-1.5">
-          <h1 className="text-2xl font-semibold tracking-tight">Blog 加工器</h1>
-          <PromptConfigButton value={prompt} onChange={setPrompt} onConfirm={handleSavePrompt} placeholder="输入 Blog 转换的 system prompt…" />
+    <div className="h-full overflow-auto lg:overflow-hidden">
+      <div className="p-6 lg:h-full flex flex-col gap-4 min-h-full">
+        <div>
+          <div className="flex items-center gap-1.5">
+            <h1 className="text-2xl font-semibold tracking-tight">Blog 加工器</h1>
+            <PromptConfigButton value={prompt} onChange={setPrompt} onConfirm={handleSavePrompt} placeholder="输入 Blog 转换的 system prompt…" />
+          </div>
+          <p className="text-sm text-muted-foreground mt-1">上传 MDX 压缩包，通过 AI 转换为结构化 JSON，支持分组管理、查看与发布</p>
         </div>
-        <p className="text-sm text-muted-foreground mt-1">上传 MDX 压缩包，通过 AI 转换为结构化 JSON，支持分组管理、查看与发布</p>
-      </div>
 
-      <div className="flex-1 grid lg:grid-cols-2 gap-4 min-h-0">
+      <div className="flex-1 grid lg:grid-cols-2 gap-4 lg:min-h-0">
         {/* Left panel: Upload & Posts list */}
-        <div className="flex flex-col gap-4 min-h-0">
+        <div className="flex flex-col gap-4 lg:min-h-0">
           {/* Group management - prominent */}
           <Card className="border-primary/30 bg-primary/5 shrink-0">
             <CardHeader className="pb-2">

@@ -497,10 +497,11 @@ export default function BlogProcessor() {
         endpointsByTask.set(key, arr);
       }
     };
-    const summarize = (val: any, max = 400): string => {
+    // 完整保留请求/响应体；仅在超过 DB 安全阈值时截断，避免 publish_logs 行体积过大
+    const summarize = (val: any, max = 200_000): string => {
       try {
-        const s = typeof val === "string" ? val : JSON.stringify(val);
-        return s.length > max ? s.slice(0, max) + `… (${s.length} chars)` : s;
+        const s = typeof val === "string" ? val : JSON.stringify(val, null, 2);
+        return s.length > max ? s.slice(0, max) + `… (truncated, total ${s.length} chars)` : s;
       } catch {
         return String(val);
       }

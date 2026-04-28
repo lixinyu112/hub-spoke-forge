@@ -324,16 +324,18 @@ function EndpointList({ endpoints }: { endpoints?: PublishLogEndpoint[] }) {
           </div>
           {ep.request_summary && (
             <details className="mt-0.5">
-              <summary className="cursor-pointer text-muted-foreground hover:text-foreground">请求体</summary>
-              <pre className="whitespace-pre-wrap break-all bg-background/60 p-1 rounded mt-0.5 max-h-32 overflow-auto">{ep.request_summary}</pre>
+              <summary className="cursor-pointer text-muted-foreground hover:text-foreground">
+                请求体（{ep.request_summary.length} chars）
+              </summary>
+              <pre className="whitespace-pre-wrap break-all bg-background/60 p-2 rounded mt-0.5 max-h-96 overflow-auto text-[10px] leading-relaxed">{ep.request_summary}</pre>
             </details>
           )}
           {ep.response_summary && (
             <details className="mt-0.5">
               <summary className="cursor-pointer text-muted-foreground hover:text-foreground">
-                {ep.ok ? "响应" : "错误"}
+                {ep.ok ? "响应" : "错误"}（{ep.response_summary.length} chars）
               </summary>
-              <pre className="whitespace-pre-wrap break-all bg-background/60 p-1 rounded mt-0.5 max-h-32 overflow-auto">{ep.response_summary}</pre>
+              <pre className="whitespace-pre-wrap break-all bg-background/60 p-2 rounded mt-0.5 max-h-96 overflow-auto text-[10px] leading-relaxed">{ep.response_summary}</pre>
             </details>
           )}
         </div>

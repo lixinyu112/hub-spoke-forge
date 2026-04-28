@@ -292,7 +292,7 @@ export default function ContentBrowser() {
           total: report.total,
           success: report.success,
           failed: report.failed,
-          details: report.details,
+          details: report.details as any,
           duration_ms: Date.now() - startedAt,
         });
       } catch (logErr) {
@@ -393,7 +393,7 @@ export default function ContentBrowser() {
         total: newResults.length,
         success: newResults.filter((d) => d.success).length,
         failed: newResults.filter((d) => !d.success).length,
-        details: newResults,
+        details: newResults as any,
         duration_ms: Date.now() - startedAt,
       });
     } catch { /* ignore */ }

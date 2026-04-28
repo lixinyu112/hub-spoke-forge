@@ -12,7 +12,8 @@ const CMS_URLS: Record<string, string> = {
   staging: "https://cms-staging.itripo3d.com",
   production: "https://cms.itripo3d.com",
 };
-const MAX_ARTICLES_PER_BATCH = 50;
+const MAX_ARTICLES_PER_BATCH = 10;
+const FETCH_TIMEOUT_MS = 25_000;
 
 serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -54,8 +55,11 @@ serve(async (req) => {
 
       try {
         const cmsBaseUrl = CMS_URLS[env];
+        const ac = new AbortController();
+        const timer = setTimeout(() => ac.abort(), FETCH_TIMEOUT_MS);
         const resp = await fetch(`${cmsBaseUrl}/api/blog-import`, {
           method: "POST",
+          signal: ac.signal,
           headers: {
             "Authorization": `users API-Key ${apiKey}`,
             "Content-Type": "application/json",
@@ -65,7 +69,7 @@ serve(async (req) => {
             slugPrefix: slug_prefix || "crescendia",
             articles,
           }),
-        });
+        }).finally(() => clearTimeout(timer));
 
         if (!resp.ok) {
           const errBody = await resp.text();

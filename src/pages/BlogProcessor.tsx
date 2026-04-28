@@ -705,7 +705,7 @@ export default function BlogProcessor() {
       if (okEntries.length === 0) continue;
 
       // —— Phase 2: push CMS ——
-      const PUSH_BATCH = mode === "serial" ? 5 : 20;
+      const PUSH_BATCH = mode === "serial" ? 2 : 5;
       for (let i = 0; i < okEntries.length; i += PUSH_BATCH) {
         const batch = okEntries.slice(i, i + PUSH_BATCH);
         let pushResults: any[] = [];

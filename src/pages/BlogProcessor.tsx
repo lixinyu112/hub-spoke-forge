@@ -1411,6 +1411,7 @@ export default function BlogProcessor() {
         source="blog"
         onRetry={handleRetryFromLog}
       />
+      </div>
     </div>
   );
 }

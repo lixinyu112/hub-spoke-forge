@@ -772,7 +772,7 @@ export default function BlogProcessor() {
         total: details.length,
         success: details.filter((d) => d.success).length,
         failed: details.filter((d) => !d.success).length,
-        details,
+        details: details as any,
         duration_ms: durationMs,
       });
     } catch (logErr) {

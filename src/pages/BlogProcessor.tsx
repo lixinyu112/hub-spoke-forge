@@ -392,15 +392,14 @@ export default function BlogProcessor() {
           context: ctxParts.length > 0 ? ctxParts.join("\n") : undefined,
         });
 
-        const json = result.generated_json;
-        const title = json?.title || json?.meta?.title || mdx.name.replace(/\.(mdx|md)$/, "");
+        const cleanedJson = stripSlugPrefixFields(json);
 
         await createBlogPost({
           project_id: currentProject.id,
           group_id: groupId,
           title,
           original_filename: mdx.name,
-          json_data: json,
+          json_data: cleanedJson,
           status: "draft",
         });
 
@@ -408,7 +407,7 @@ export default function BlogProcessor() {
           type: "blog",
           feishu_content: mdx.content.slice(0, 5000),
           prompt_content: prompt,
-          generated_json: json,
+          generated_json: cleanedJson,
         });
       } catch (err: any) {
         console.error(`处理 ${mdx.name} 失败:`, err);

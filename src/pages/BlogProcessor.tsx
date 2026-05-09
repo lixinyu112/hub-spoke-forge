@@ -452,9 +452,10 @@ export default function BlogProcessor() {
     if (!selectedPost) return;
     try {
       const parsed = JSON.parse(editedCode);
-      await updateBlogPost(selectedPost.id, { json_data: parsed });
-      setSelectedPost({ ...selectedPost, json_data: parsed });
-      setEditingJson(editedCode);
+      const cleaned = stripSlugPrefixFields(parsed);
+      await updateBlogPost(selectedPost.id, { json_data: cleaned });
+      setSelectedPost({ ...selectedPost, json_data: cleaned });
+      setEditingJson(JSON.stringify(cleaned, null, 2));
       await loadPosts();
       toast({ title: "Blog JSON 已保存" });
     } catch (e: any) {

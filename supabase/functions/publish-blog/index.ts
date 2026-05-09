@@ -292,7 +292,7 @@ serve(async (req) => {
   }
 
   try {
-    const { items, languages, translate_prompt, slug_prefix, environment } = await req.json();
+    const { items, languages, translate_prompt, environment } = await req.json();
 
     if (!items?.length || !languages?.length) {
       return new Response(
@@ -369,7 +369,6 @@ serve(async (req) => {
             },
             body: JSON.stringify({
               locale: lang,
-              slugPrefix: slug_prefix || "crescendia",
               articles,
             }),
           });

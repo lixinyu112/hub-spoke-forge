@@ -21,7 +21,7 @@ serve(async (req) => {
   }
 
   try {
-    const { entries, language, slug_prefix, environment } = await req.json();
+    const { entries, language, environment } = await req.json();
     // entries: Array<{ item_id: string; articles: any[] }>
     if (!Array.isArray(entries) || entries.length === 0 || !language) {
       return new Response(
@@ -66,7 +66,6 @@ serve(async (req) => {
           },
           body: JSON.stringify({
             locale: language,
-            slugPrefix: slug_prefix || "crescendia",
             articles,
           }),
         }).finally(() => clearTimeout(timer));

@@ -714,7 +714,6 @@ export default function BlogProcessor() {
           const data = await invokeWithRetry("publish-blog-cms", {
             entries: batch.map((b) => ({ item_id: b.item_id, articles: b.articles })),
             language: lang,
-            slug_prefix: "crescendia",
             environment,
           }, { itemIds: batch.map((b) => b.item_id), language: lang, targetUrl: `${cmsBaseUrl}/api/blog-import` });
           pushResults = data?.results || [];

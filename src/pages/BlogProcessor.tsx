@@ -385,10 +385,12 @@ export default function BlogProcessor() {
           ctxParts.push(`\n\n【用户提供的 JSON 模板（请严格按照此格式和字段结构生成，仅更新内容）】\n${uploadedJsonTemplate}`);
         }
 
+        const slugPrefixRule = "【Blog 加工器特别约束】严禁在生成的 JSON 中输出 slugPrefix、slug_prefix、slug-prefix 等任何形式的 slug 前缀字段。";
+        const composedPrompt = prompt ? `${prompt}\n\n${slugPrefixRule}` : slugPrefixRule;
         const result = await generateJson({
           type: "spoke",
           feishu_content: mdx.content,
-          custom_prompt: prompt || undefined,
+          custom_prompt: composedPrompt,
           context: ctxParts.length > 0 ? ctxParts.join("\n") : undefined,
         });
 

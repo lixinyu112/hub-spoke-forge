@@ -686,7 +686,7 @@ export default function BlogProcessor() {
             }
             try {
               const data = await invokeWithRetry("translate-blog", {
-                item: { id: post.id, title: post.title, slug: post.slug, json_data: post.json_data },
+                item: { id: post.id, title: post.title, slug: post.slug, json_data: stripSlugPrefixFields(post.json_data) },
                 language: lang,
                 translate_prompt: translatePrompt || undefined,
               }, { itemIds: [post.id], language: lang });

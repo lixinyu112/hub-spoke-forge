@@ -210,8 +210,7 @@ const HUB_SCHEMA_PROMPT = `你是一个 SEO 内容专家。请根据提供的 Sp
 7. 末尾依次添加 faq（包含 10+ 条高质量问答）和 ctaBanner
 8. relatedHubs 列出 2-3 个相关主题Hub
 9. tocNav 的 items 中 url 使用 "/hub-slug#组件id" 格式指向页面内锚点
-10. 严禁输出 slugPrefix、slug_prefix、slug-prefix 等任何形式的 slug 前缀字段
-11. 只输出合法JSON，不要附加说明文字`;
+10. 只输出合法JSON，不要附加说明文字`;
 
 /**
  * Robustly extract JSON from LLM response, handling markdown fences,

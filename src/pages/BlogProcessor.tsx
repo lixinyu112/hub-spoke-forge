@@ -83,6 +83,23 @@ function extractArticleFields(post: BlogPost) {
 }
 
 export default function BlogProcessor() {
+  // Recursively remove any slugPrefix / slug_prefix / slug-prefix fields
+  const stripSlugPrefixFields = (obj: any): any => {
+    if (Array.isArray(obj)) {
+      return obj.map(stripSlugPrefixFields);
+    }
+    if (obj !== null && typeof obj === "object") {
+      const cleaned: Record<string, any> = {};
+      for (const [key, value] of Object.entries(obj)) {
+        const lower = key.toLowerCase();
+        if (lower === "slugprefix" || lower === "slug_prefix" || lower === "slug-prefix") continue;
+        cleaned[key] = stripSlugPrefixFields(value);
+      }
+      return cleaned;
+    }
+    return obj;
+  };
+
   const { currentProject } = useProject();
   const [groups, setGroups] = useState<BlogGroup[]>([]);
   const [selectedGroup, setSelectedGroup] = useState<string>("");
@@ -377,13 +394,14 @@ export default function BlogProcessor() {
 
         const json = result.generated_json;
         const title = json?.title || json?.meta?.title || mdx.name.replace(/\.(mdx|md)$/, "");
+        const cleanedJson = stripSlugPrefixFields(json);
 
         await createBlogPost({
           project_id: currentProject.id,
           group_id: groupId,
           title,
           original_filename: mdx.name,
-          json_data: json,
+          json_data: cleanedJson,
           status: "draft",
         });
 
@@ -391,7 +409,7 @@ export default function BlogProcessor() {
           type: "blog",
           feishu_content: mdx.content.slice(0, 5000),
           prompt_content: prompt,
-          generated_json: json,
+          generated_json: cleanedJson,
         });
       } catch (err: any) {
         console.error(`处理 ${mdx.name} 失败:`, err);

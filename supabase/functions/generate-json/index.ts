@@ -78,7 +78,8 @@ const SPOKE_SCHEMA_PROMPT = `你是一个 SEO 内容专家。请根据提供的�
 6. 最后一个组件是 ctaBanner
 7. 整个 components 数组通常只有 3 个组件：articleHeader + contentBlock + ctaBanner
 8. 只输出合法JSON，不要附加说明文字
-9. 如果补充上下文中包含"已有 Spoke JSON"，则必须沿用其结构（组件类型、组件数量、字段格式），仅根据新的飞书文档内容更新具体文案和数据；如用户在补充内容中有特殊结构要求则按用户要求调整`;
+9. 严禁输出 slugPrefix、slug_prefix、slug-prefix 等任何形式的 slug 前缀字段
+10. 如果补充上下文中包含"已有 Spoke JSON"，则必须沿用其结构（组件类型、组件数量、字段格式），仅根据新的飞书文档内容更新具体文案和数据；如用户在补充内容中有特殊结构要求则按用户要求调整`;
 
 const HUB_SCHEMA_PROMPT = `你是一个 SEO 内容专家。请根据提供的 Spoke 页面数据和补充上下文，生成一个符合 Tripo3D Hub 聚合页面规范的 JSON。
 
@@ -210,7 +211,8 @@ const HUB_SCHEMA_PROMPT = `你是一个 SEO 内容专家。请根据提供的 Sp
 7. 末尾依次添加 faq（包含 10+ 条高质量问答）和 ctaBanner
 8. relatedHubs 列出 2-3 个相关主题Hub
 9. tocNav 的 items 中 url 使用 "/hub-slug#组件id" 格式指向页面内锚点
-10. 只输出合法JSON，不要附加说明文字`;
+10. 严禁输出 slugPrefix、slug_prefix、slug-prefix 等任何形式的 slug 前缀字段
+11. 只输出合法JSON，不要附加说明文字`;
 
 /**
  * Robustly extract JSON from LLM response, handling markdown fences,

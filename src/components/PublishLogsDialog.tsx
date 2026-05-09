@@ -10,6 +10,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 export interface PublishLogEndpoint {
   fn: string;
   url: string;
+  target_url?: string;
   method: "POST" | "GET";
   request_summary?: string;
   status?: number;

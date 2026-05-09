@@ -653,10 +653,10 @@ export default function BlogProcessor() {
 
     // Build a fallback "raw" article for no-translate mode
     const rawArticles = (post: BlogPost) => {
-      const data: any = post.json_data || {};
+      const data: any = stripSlugPrefixFields(post.json_data || {});
       if (Array.isArray(data.articles) && data.articles.length > 0) {
         return data.articles.map((a: any) => {
-          const article = { ...a };
+          const article = stripSlugPrefixFields({ ...a });
           if (Array.isArray(article.keywords)) {
             article.keywords = article.keywords.map((k: any) =>
               typeof k === "string" ? { keyword: k } : k,
@@ -665,11 +665,11 @@ export default function BlogProcessor() {
           return article;
         });
       }
-      const fields = extractArticleFields(post);
-      return [{
+      const fields = extractArticleFields({ ...post, json_data: data });
+      return [stripSlugPrefixFields({
         ...fields,
         keywords: fields.keywords?.map((k) => ({ keyword: k })),
-      }];
+      })];
     };
 
     for (const [lang, postsForLang] of tasksByLang) {

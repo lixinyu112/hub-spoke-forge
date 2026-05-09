@@ -706,6 +706,7 @@ export default function BlogProcessor() {
 
       // —— Phase 2: push CMS ——
       const PUSH_BATCH = mode === "serial" ? 2 : 5;
+      const cmsBaseUrl = environment === "production" ? "https://cms.itripo3d.com" : "https://cms-staging.itripo3d.com";
       for (let i = 0; i < okEntries.length; i += PUSH_BATCH) {
         const batch = okEntries.slice(i, i + PUSH_BATCH);
         let pushResults: any[] = [];
@@ -715,7 +716,7 @@ export default function BlogProcessor() {
             language: lang,
             slug_prefix: "crescendia",
             environment,
-          }, { itemIds: batch.map((b) => b.item_id), language: lang });
+          }, { itemIds: batch.map((b) => b.item_id), language: lang, targetUrl: `${cmsBaseUrl}/api/blog-import` });
           pushResults = data?.results || [];
         } catch (err: any) {
           const msg = err?.message || String(err);

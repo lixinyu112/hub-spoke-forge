@@ -10,6 +10,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 export interface PublishLogEndpoint {
   fn: string;
   url: string;
+  target_url?: string;
   method: "POST" | "GET";
   request_summary?: string;
   status?: number;
@@ -320,8 +321,13 @@ function EndpointList({ endpoints }: { endpoints?: PublishLogEndpoint[] }) {
             {typeof ep.duration_ms === "number" && (
               <span className="text-muted-foreground">{ep.duration_ms}ms</span>
             )}
-            <span className="truncate text-muted-foreground" title={ep.url}>{ep.url}</span>
+            <span className="break-all text-muted-foreground">{ep.url}</span>
           </div>
+          {ep.target_url && (
+            <div className="text-[10px] text-muted-foreground break-all pl-1">
+              目标: {ep.target_url}
+            </div>
+          )}
           {ep.request_summary && (
             <details className="mt-0.5">
               <summary className="cursor-pointer text-muted-foreground hover:text-foreground">

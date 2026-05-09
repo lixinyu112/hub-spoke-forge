@@ -38,6 +38,8 @@ export interface PublishEndpointCall {
   fn: string;
   /** 实际请求的 URL（edge function 完整 URL） */
   url: string;
+  /** CMS 目标地址（仅 publish-blog-cms 有值） */
+  target_url?: string;
   method: "POST" | "GET";
   /** 请求体摘要（截断） */
   request_summary?: string;

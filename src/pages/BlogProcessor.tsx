@@ -639,7 +639,7 @@ export default function BlogProcessor() {
             source_id: r.item_id,
             title: post.title,
             language: lang,
-            json_data: post.json_data,
+            json_data: stripSlugPrefixFields(post.json_data),
             status: "published",
           });
           await updateBlogPost(r.item_id, { status: "published" });

@@ -395,6 +395,11 @@ export default function BlogProcessor() {
         const json = result.generated_json;
         const title = json?.title || json?.meta?.title || mdx.name.replace(/\.(mdx|md)$/, "");
         const cleanedJson = stripSlugPrefixFields(json);
+
+        await createBlogPost({
+          project_id: currentProject.id,
+          group_id: groupId,
+          title,
           original_filename: mdx.name,
           json_data: cleanedJson,
           status: "draft",

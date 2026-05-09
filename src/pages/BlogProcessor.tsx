@@ -452,9 +452,10 @@ export default function BlogProcessor() {
     if (!selectedPost) return;
     try {
       const parsed = JSON.parse(editedCode);
-      await updateBlogPost(selectedPost.id, { json_data: parsed });
-      setSelectedPost({ ...selectedPost, json_data: parsed });
-      setEditingJson(editedCode);
+      const cleaned = stripSlugPrefixFields(parsed);
+      await updateBlogPost(selectedPost.id, { json_data: cleaned });
+      setSelectedPost({ ...selectedPost, json_data: cleaned });
+      setEditingJson(JSON.stringify(cleaned, null, 2));
       await loadPosts();
       toast({ title: "Blog JSON 已保存" });
     } catch (e: any) {
@@ -638,7 +639,7 @@ export default function BlogProcessor() {
             source_id: r.item_id,
             title: post.title,
             language: lang,
-            json_data: post.json_data,
+            json_data: stripSlugPrefixFields(post.json_data),
             status: "published",
           });
           await updateBlogPost(r.item_id, { status: "published" });
@@ -652,10 +653,10 @@ export default function BlogProcessor() {
 
     // Build a fallback "raw" article for no-translate mode
     const rawArticles = (post: BlogPost) => {
-      const data: any = post.json_data || {};
+      const data: any = stripSlugPrefixFields(post.json_data || {});
       if (Array.isArray(data.articles) && data.articles.length > 0) {
         return data.articles.map((a: any) => {
-          const article = { ...a };
+          const article = stripSlugPrefixFields({ ...a });
           if (Array.isArray(article.keywords)) {
             article.keywords = article.keywords.map((k: any) =>
               typeof k === "string" ? { keyword: k } : k,
@@ -664,11 +665,11 @@ export default function BlogProcessor() {
           return article;
         });
       }
-      const fields = extractArticleFields(post);
-      return [{
+      const fields = extractArticleFields({ ...post, json_data: data });
+      return [stripSlugPrefixFields({
         ...fields,
         keywords: fields.keywords?.map((k) => ({ keyword: k })),
-      }];
+      })];
     };
 
     for (const [lang, postsForLang] of tasksByLang) {
@@ -685,7 +686,7 @@ export default function BlogProcessor() {
             }
             try {
               const data = await invokeWithRetry("translate-blog", {
-                item: { id: post.id, title: post.title, slug: post.slug, json_data: post.json_data },
+                item: { id: post.id, title: post.title, slug: post.slug, json_data: stripSlugPrefixFields(post.json_data) },
                 language: lang,
                 translate_prompt: translatePrompt || undefined,
               }, { itemIds: [post.id], language: lang });

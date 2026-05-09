@@ -546,7 +546,7 @@ export default function BlogProcessor() {
     const invokeWithRetry = async (
       fn: string,
       body: any,
-      track?: { itemIds: string[]; language: string },
+      track?: { itemIds: string[]; language: string; targetUrl?: string },
     ) => {
       let lastErr: any = null;
       for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
@@ -559,7 +559,7 @@ export default function BlogProcessor() {
                 const eb = await error.context.json();
                 if (eb?.results || eb?.articles) {
                   if (track) pushEndpoint(track.itemIds, track.language, {
-                    fn, url: `${FN_BASE_URL}/${fn}`, method: "POST",
+                    fn, url: `${FN_BASE_URL}/${fn}`, target_url: track.targetUrl, method: "POST",
                     request_summary: summarize(body),
                     status: error?.context?.status, ok: true,
                     response_summary: summarize(eb),
@@ -571,7 +571,7 @@ export default function BlogProcessor() {
             } catch { /* ignore */ }
             const errMsg = await readFunctionError(fn, error);
             if (track) pushEndpoint(track.itemIds, track.language, {
-              fn, url: `${FN_BASE_URL}/${fn}`, method: "POST",
+              fn, url: `${FN_BASE_URL}/${fn}`, target_url: track.targetUrl, method: "POST",
               request_summary: summarize(body),
               status: error?.context?.status, ok: false,
               response_summary: summarize(errMsg),
@@ -580,7 +580,7 @@ export default function BlogProcessor() {
             throw new Error(errMsg);
           }
           if (track) pushEndpoint(track.itemIds, track.language, {
-            fn, url: `${FN_BASE_URL}/${fn}`, method: "POST",
+            fn, url: `${FN_BASE_URL}/${fn}`, target_url: track.targetUrl, method: "POST",
             request_summary: summarize(body),
             status: 200, ok: true,
             response_summary: summarize(data),

@@ -83,6 +83,23 @@ function extractArticleFields(post: BlogPost) {
 }
 
 export default function BlogProcessor() {
+  // Recursively remove any slugPrefix / slug_prefix / slug-prefix fields
+  const stripSlugPrefixFields = (obj: any): any => {
+    if (Array.isArray(obj)) {
+      return obj.map(stripSlugPrefixFields);
+    }
+    if (obj !== null && typeof obj === "object") {
+      const cleaned: Record<string, any> = {};
+      for (const [key, value] of Object.entries(obj)) {
+        const lower = key.toLowerCase();
+        if (lower === "slugprefix" || lower === "slug_prefix" || lower === "slug-prefix") continue;
+        cleaned[key] = stripSlugPrefixFields(value);
+      }
+      return cleaned;
+    }
+    return obj;
+  };
+
   const { currentProject } = useProject();
   const [groups, setGroups] = useState<BlogGroup[]>([]);
   const [selectedGroup, setSelectedGroup] = useState<string>("");
